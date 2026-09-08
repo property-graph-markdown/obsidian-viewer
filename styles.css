@@ -224,11 +224,13 @@ body.pgm-has-maximized-viewer {
   transform: translateY(-50%);
 }
 
-.pgm-search {
+/* Override Obsidian's input[type="search"] padding within this viewer only. */
+.pgm-search-wrap > input.pgm-search[type="search"] {
+  box-sizing: border-box;
   width: 100%;
   min-width: 0;
   height: 31px;
-  padding: 0 10px 0 31px;
+  padding: 0 10px 0 34px;
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
   color: var(--text-normal);
@@ -237,7 +239,7 @@ body.pgm-has-maximized-viewer {
   font-size: var(--font-ui-smaller);
 }
 
-.pgm-search:focus {
+.pgm-search-wrap > input.pgm-search[type="search"]:focus {
   border-color: var(--pgm-accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--pgm-accent) 16%, transparent);
 }
