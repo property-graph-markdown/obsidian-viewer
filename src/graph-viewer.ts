@@ -730,7 +730,9 @@ export class PgmGraphViewer {
         y: previous?.y ?? (seed?.y ?? 0) + dy,
       };
     });
-    const separated = resolveNodeOverlaps(positioned, focusId);
+    // Resolve automatic placement only. A redraw must preserve the user's
+    // exact positions, including any overlaps created by manual dragging.
+    const separated = needsLayout ? resolveNodeOverlaps(positioned, focusId) : positioned;
     for (const node of separated) this.positions.set(node.id, node);
     return separated;
   }
@@ -954,9 +956,6 @@ export class PgmGraphViewer {
           this.camera = current.camera;
           this.fitGraphToPane = current.wasFit;
           if (current.node) surface.nodes.set(current.node.id, current.node);
-        } else if (current.node) {
-          surface.nodes = new Map(resolveNodeOverlaps([...surface.nodes.values()], current.node.id)
-            .map((node) => [node.id, node]));
         }
         this.redrawPositions(surface);
         this.applyCamera();

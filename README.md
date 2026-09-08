@@ -50,8 +50,10 @@ requests. Your Markdown stays in your vault.
 
 ## Explore the local graph
 
-- **Drag a concept** to move it; its relationships follow. Selecting a concept
-  or relationship preserves the current node positions and viewport.
+- **Drag a concept** to move only that concept; its relationships follow and
+  every other concept stays in place. Manual positions are retained even when
+  titles overlap. Selecting a concept or relationship preserves the current
+  node positions and viewport.
 - **Click a concept** to highlight its incoming and outgoing relationships,
   including their types and arrowheads. Other relationships fade. The initial
   overview stays neutral until you select a concept.
