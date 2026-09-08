@@ -20,19 +20,19 @@ import { NavigationHistory } from "./navigation-history";
 import { renderNodeRelationships } from "./node-relationships";
 import { graphMatches } from "./node-search";
 import { attachPropertyPanelResize } from "./property-panel-resize";
+import { mergeSelection, nodeIdsInMarquee, selectionKey, toggleSelection, type GraphSelectionItem } from "./graph-selection";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const PROPERTY_PANEL_HEIGHT_KEY = "pgm-viewer.propertyPanelHeight";
 let markerCounter = 0;
 
-type Selection =
-  | { kind: "node"; id: string }
-  | { kind: "edge"; id: string }
-  | null;
+type Selection = GraphSelectionItem | null;
 
 interface GraphViewSnapshot {
   localState: LocalGraphState;
-  selection: Selection;
+  selections: GraphSelectionItem[];
+  hiddenNodeIds: Set<string>;
+  hiddenEdgeIds: Set<string>;
   highlightedNodeId: string | null;
   query: string;
   positions: Map<string, PositionedPgmNode>;
@@ -83,7 +83,12 @@ export class PgmGraphViewer {
   private readonly markerId = `pgm-arrow-${markerCounter++}`;
   private graph: PgmGraph | null = null;
   private query = "";
-  private selection: Selection = null;
+  private selections: GraphSelectionItem[] = [];
+  private hiddenNodeIds = new Set<string>();
+  private hiddenEdgeIds = new Set<string>();
+  // Single-item actions and the property inspector require exactly one item.
+  private get selection(): Selection { return this.selections.length === 1 ? this.selections[0]! : null; }
+  private set selection(value: Selection) { this.selections = value ? [value] : []; }
   private highlightedNodeId: string | null = null;
   private localState: LocalGraphState = createLocalGraphState(null);
   private refreshTimer: number | undefined;
@@ -98,6 +103,7 @@ export class PgmGraphViewer {
   private resizeObserver: ResizeObserver | null = null;
   private propertyPanelHeight: number | null = null;
   private clearPropertyPanelResize: (() => void) | null = null;
+  private clearGraphGestures: (() => void) | null = null;
   private camera = { x: 0, y: 0, scale: 0.57 };
   private viewportSize = { width: 0, height: 0 };
   private fitScale = 1;
@@ -202,6 +208,8 @@ export class PgmGraphViewer {
         this.graph.nodes.slice().sort((left, right) => compareText(left.id, right.id))[0]?.id ??
         null;
       this.localState = createLocalGraphState(focusNodeId);
+      this.hiddenNodeIds.clear();
+      this.hiddenEdgeIds.clear();
       this.selection = focusNodeId ? { kind: "node", id: focusNodeId } : null;
       this.highlightedNodeId = null;
       this.history.reset(this.captureView());
@@ -214,10 +222,19 @@ export class PgmGraphViewer {
       };
     }
 
-    if (this.selection && !this.selectionExists(this.selection)) {
-      this.selection = focusNodeId ? { kind: "node", id: focusNodeId } : null;
+    const wasMultiple = this.selections.length > 1;
+    const hadSelection = this.selections.length > 0;
+    this.selections = this.selections.filter((item) => this.selectionExists(item));
+    this.hiddenNodeIds = new Set([...this.hiddenNodeIds].filter((id) => nodeIds.has(id)));
+    const edgeIds = new Set(groupEdges(this.graph.edges).map((edge) => edge.id));
+    this.hiddenEdgeIds = new Set([...this.hiddenEdgeIds].filter((id) => edgeIds.has(id)));
+    if (hadSelection && this.selections.length === 0 && focusNodeId && !this.hiddenNodeIds.has(focusNodeId)) {
+      this.selection = { kind: "node", id: focusNodeId };
     }
     this.reconcileVisibleSelection();
+    if (wasMultiple && this.selections.length <= 1) {
+      this.highlightedNodeId = this.selection?.kind === "node" ? this.selection.id : null;
+    }
   }
 
   private selectionExists(selection: Exclude<Selection, null>): boolean {
@@ -227,12 +244,35 @@ export class PgmGraphViewer {
   }
 
   private reconcileVisibleSelection(): void {
-    if (!this.graph || !this.selection) return;
+    if (!this.graph || this.selections.length === 0) return;
     const projection = projectLocalGraph(this.graph, this.localState);
-    const items = this.selection.kind === "node" ? projection.nodes : groupEdges(projection.edges);
-    if (items.some((item) => item.id === this.selection?.id)) return;
+    const nodes = new Set(projection.nodes.filter((node) => !this.hiddenNodeIds.has(node.id)).map((node) => node.id));
+    const edges = new Set(groupEdges(projection.edges).filter((edge) => !this.hiddenEdgeIds.has(edge.id)
+      && !this.hiddenNodeIds.has(edge.source) && !this.hiddenNodeIds.has(edge.target)).map((edge) => edge.id));
+    this.selections = this.selections.filter((item) => (item.kind === "node" ? nodes : edges).has(item.id));
+    if (this.selections.length > 0) return;
     const focusNodeId = this.localState.focusNodeId;
-    this.selection = focusNodeId ? { kind: "node", id: focusNodeId } : null;
+    this.selection = focusNodeId && nodes.has(focusNodeId) ? { kind: "node", id: focusNodeId } : null;
+  }
+
+  private visibleMatches(nodes: PgmNode[], edges: PgmEdge[]): ReturnType<typeof graphMatches> {
+    const found = graphMatches(nodes, edges, this.query, this.localState.focusNodeId);
+    const matches = { nodeIds: new Set(found.nodeIds), edgeIds: new Set(found.edgeIds) };
+    for (const id of this.hiddenNodeIds) matches.nodeIds.delete(id);
+    for (const edge of groupEdges(edges)) {
+      if (this.hiddenEdgeIds.has(edge.id) || this.hiddenNodeIds.has(edge.source) || this.hiddenNodeIds.has(edge.target)) {
+        for (const relationship of edge.relationships) matches.edgeIds.delete(relationship.id);
+      }
+    }
+    return matches;
+  }
+
+  private isSelected(kind: GraphSelectionItem["kind"], id: string): boolean {
+    return this.selections.some((item) => item.kind === kind && item.id === id);
+  }
+
+  private isHighlightedNode(id: string): boolean {
+    return this.isSelected("node", id) && (this.selections.length > 1 || this.highlightedNodeId === id);
   }
 
   private renderLoading(): void {
@@ -287,6 +327,10 @@ export class PgmGraphViewer {
     );
     const selectedNodeId = this.selection?.kind === "node" ? this.selection.id : null;
     openSelected.disabled = selectedNodeId === null;
+    const focusSelected = this.iconButton(selectionActions, "focus", "Focus", () => {
+      if (selectedNodeId !== null) this.refocus(selectedNodeId);
+    });
+    focusSelected.disabled = selectedNodeId === null;
     const selectedExpanded = selectedNodeId !== null &&
       this.localState.expandedNodeIds.has(selectedNodeId);
     const expansionToggle = this.iconButton(
@@ -296,8 +340,13 @@ export class PgmGraphViewer {
       () => this.toggleSelectedExpansion(),
     );
     expansionToggle.disabled = selectedNodeId === null;
+    const hideSelected = this.iconButton(selectionActions, "eye-off", "Hide selected", () => this.hideSelected());
+    hideSelected.disabled = this.selections.length === 0;
 
     const viewActions = actionGroup(actions, "Graph view");
+    if (this.hiddenNodeIds.size || this.hiddenEdgeIds.size) {
+      this.iconButton(viewActions, "eye", "Show hidden", () => this.showHidden());
+    }
     this.iconButton(viewActions, "scan", "Fit graph", () => this.fitGraph());
     this.iconButton(viewActions, "refresh-cw", "Reload", () => void this.refresh());
     const maximize = this.iconButton(
@@ -345,7 +394,7 @@ export class PgmGraphViewer {
       searchWrap,
       textElement(
         "span",
-        "Drag: move · Scroll: zoom · Double-click: expand · Ctrl/Cmd-click: focus",
+        "Drag: move · Shift-click/drag: select · Scroll: zoom · Double-click: expand · Ctrl/Cmd-click: focus",
         "pgm-interaction-help",
       ),
     );
@@ -358,7 +407,7 @@ export class PgmGraphViewer {
 
   private renderSummary(projection: LocalGraphProjection): HTMLElement {
     if (!this.graph) return textElement("p", "", "pgm-summary");
-    const matches = graphMatches(projection.nodes, projection.edges, this.query, this.localState.focusNodeId);
+    const matches = this.visibleMatches(projection.nodes, projection.edges);
     const visibleNodes = matches.nodeIds.size;
     const visibleEdges = matches.edgeIds.size;
     const nodes = this.graph.nodes.length;
@@ -430,20 +479,18 @@ export class PgmGraphViewer {
   private renderSvg(nodes: PgmNode[], edges: PgmEdge[]): SVGSVGElement {
     // Lay out the full projection before filtering, retaining every cached
     // position when typing or clearing a query.
-    const matches = graphMatches(nodes, edges, this.query, this.localState.focusNodeId);
+    const matches = this.visibleMatches(nodes, edges);
     const positioned = this.positionNodes(nodes, edges).filter((node) => matches.nodeIds.has(node.id));
     const byId = new Map(positioned.map((node) => [node.id, node]));
     const visibleEdges = edges.filter((edge) => matches.edgeIds.has(edge.id));
     const connections = groupEdges(visibleEdges);
-    const selectedConnection = this.selection?.kind === "edge"
-      ? connections.find((connection) => connection.id === this.selection?.id)
-      : undefined;
+    const selectedConnections = connections.filter((connection) => this.isSelected("edge", connection.id));
+    const selectedEndpoints = new Set(selectedConnections.flatMap((edge) => [edge.source, edge.target]));
 
     const svg = svgElement("svg");
     svg.classList.add("pgm-graph");
-    if (selectedConnection) svg.classList.add("has-selected-edge");
-    if (this.selection?.kind === "node" && byId.has(this.selection.id)
-      && this.highlightedNodeId === this.selection.id) {
+    if (selectedConnections.length) svg.classList.add("has-selected-edge");
+    if (positioned.some((node) => this.isHighlightedNode(node.id))) {
       svg.classList.add("has-selected-node");
     }
     svg.setAttribute("tabindex", "0");
@@ -513,11 +560,11 @@ export class PgmGraphViewer {
     const nodeLayer = svgElement("g");
     nodeLayer.classList.add("pgm-nodes");
     for (const node of positioned) {
-      nodeLayer.append(this.renderNode(node, true, selectedConnection));
+      nodeLayer.append(this.renderNode(node, true, selectedEndpoints));
     }
     viewport.append(nodeLayer);
     svg.append(viewport);
-    if (positioned.length === 0 && this.query.trim()) {
+    if (positioned.length === 0) {
       const empty = svgElement("text");
       empty.setAttribute("x", "50%");
       empty.setAttribute("y", "50%");
@@ -525,7 +572,7 @@ export class PgmGraphViewer {
       empty.setAttribute("fill", "var(--text-muted)");
       empty.setAttribute("font-size", "14");
       empty.setAttribute("pointer-events", "none");
-      empty.textContent = "No matching concepts";
+      empty.textContent = this.hiddenNodeIds.size ? "No visible concepts · Show hidden" : "No matching concepts";
       svg.append(empty);
     }
     this.surface = { svg, viewport, edgeLayer, nodeLayer, nodes: byId, edges: connections, captions, captionsNeedLayout: true };
@@ -533,7 +580,7 @@ export class PgmGraphViewer {
     return svg;
   }
 
-  private renderNode(node: PositionedPgmNode, queryMatch: boolean, selectedConnection?: PgmEdgeGroup): SVGGElement {
+  private renderNode(node: PositionedPgmNode, queryMatch: boolean, selectedEndpoints: ReadonlySet<string>): SVGGElement {
     const group = svgElement("g");
     group.classList.add("pgm-node");
     group.dataset.nodeId = node.id;
@@ -544,20 +591,21 @@ export class PgmGraphViewer {
     group.classList.add(isExpanded ? "is-expanded" : "is-collapsed");
     if (isFocus) group.classList.add("is-focus");
     if (!queryMatch) group.classList.add("is-dimmed");
-    if (this.selection?.kind === "node" && this.selection.id === node.id) {
+    if (this.isSelected("node", node.id)) {
       group.classList.add("is-selected");
     }
-    if (selectedConnection?.source === node.id || selectedConnection?.target === node.id) {
+    if (selectedEndpoints.has(node.id)) {
       group.classList.add("is-edge-endpoint");
     }
     group.setAttribute("transform", `translate(${node.x - node.width / 2} ${node.y - node.height / 2})`);
     group.setAttribute("role", "button");
     group.setAttribute("tabindex", "0");
     group.setAttribute("aria-expanded", String(isExpanded));
+    group.setAttribute("aria-pressed", String(this.isSelected("node", node.id)));
     if (isFocus) group.setAttribute("aria-current", "true");
     group.setAttribute(
       "aria-label",
-      `${nodeTitle(node)}${isFocus ? ", focus" : ""}. Drag to move; double-click to ${isExpanded ? "contract" : "expand"}; Ctrl or Command click to focus.`,
+      `${nodeTitle(node)}${isFocus ? ", focus" : ""}. Drag to move; Shift-click to add or remove from selection; double-click to ${isExpanded ? "contract" : "expand"}; Ctrl or Command click to focus.`,
     );
 
     if (isFocus) {
@@ -596,6 +644,11 @@ export class PgmGraphViewer {
     group.append(body, titleBackground, label, tooltip);
 
     group.addEventListener("click", (event) => {
+      if (event.shiftKey) {
+        event.preventDefault();
+        this.select({ kind: "node", id: node.id }, true);
+        return;
+      }
       if (event.ctrlKey || event.metaKey) {
         event.preventDefault();
         window.clearTimeout(this.nodeClickTimer);
@@ -609,7 +662,7 @@ export class PgmGraphViewer {
       }, 220);
     });
     group.addEventListener("dblclick", (event) => {
-      if (event.ctrlKey || event.metaKey) return;
+      if (event.ctrlKey || event.metaKey || event.shiftKey) return;
       event.preventDefault();
       window.clearTimeout(this.nodeClickTimer);
       this.toggleNodeExpansion(node.id);
@@ -624,6 +677,9 @@ export class PgmGraphViewer {
       if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
         this.refocus(node.id);
+      } else if ((event.key === "Enter" || event.key === " ") && event.shiftKey) {
+        event.preventDefault();
+        this.select({ kind: "node", id: node.id }, true);
       } else if (event.key === " ") {
         event.preventDefault();
         this.toggleNodeExpansion(node.id);
@@ -652,14 +708,13 @@ export class PgmGraphViewer {
       ? "is-outgoing" : edge.target === this.localState.focusNodeId ? "is-incoming" : "is-expanded");
     if (!queryMatch) group.classList.add("is-dimmed");
     if (!target) group.classList.add("is-unresolved");
-    const selected = this.selection?.kind === "edge" && this.selection.id === edge.id;
+    const selected = this.isSelected("edge", edge.id);
     if (selected) group.classList.add("is-selected");
-    const related = this.selection?.kind === "node"
-      && this.highlightedNodeId === this.selection.id
-      && (edge.source === this.selection.id || edge.target === this.selection.id);
+    const related = this.isHighlightedNode(edge.source) || this.isHighlightedNode(edge.target);
     if (related) group.classList.add("is-related");
     group.setAttribute("role", "button");
     group.setAttribute("tabindex", "0");
+    group.setAttribute("aria-pressed", String(selected));
     const title = edge.types.join(" · ");
     const direction = edge.forward && edge.reverse ? "↔" : edge.forward ? "→" : "←";
     group.setAttribute("aria-label", `${title}: ${edge.source} ${direction} ${edge.target}; ${edge.relationships.length} relationship${edge.relationships.length === 1 ? "" : "s"}`);
@@ -728,26 +783,60 @@ export class PgmGraphViewer {
     group.addEventListener("pointerleave", () => setArrow(selected || related || group.matches(":focus-visible")));
     group.addEventListener("focus", () => setArrow(true));
     group.addEventListener("blur", () => setArrow(selected || related || group.matches(":hover")));
-    const select = () => this.select({ kind: "edge", id: edge.id });
+    const select = (event: MouseEvent | KeyboardEvent) => this.select({ kind: "edge", id: edge.id }, event.shiftKey);
     group.addEventListener("click", select);
     group.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        select();
+        select(event);
       }
     });
     return group;
   }
 
-  private select(selection: Selection): void {
+  private select(selection: Selection, additive = false): void {
+    const selections = selection
+      ? additive ? toggleSelection(this.selections, selection) : [selection]
+      : [];
+    this.selectItems(selections);
+  }
+
+  private selectItems(selections: GraphSelectionItem[]): void {
     window.clearTimeout(this.nodeClickTimer);
-    const highlightedNodeId = selection?.kind === "node" ? selection.id : null;
-    if (this.selection?.kind === selection?.kind && this.selection?.id === selection?.id
+    const single = selections.length === 1 ? selections[0] : undefined;
+    const highlightedNodeId = single?.kind === "node" ? single.id : null;
+    if (selections.length === this.selections.length
+      && selections.every((item, index) => selectionKey(item) === selectionKey(this.selections[index]!))
       && this.highlightedNodeId === highlightedNodeId) return;
     this.openNodeGeneration += 1;
     this.history.replaceCurrent(this.captureView());
-    this.selection = selection;
+    this.selections = selections;
     this.highlightedNodeId = highlightedNodeId;
+    this.history.push(this.captureView());
+    this.renderPreservingCamera();
+  }
+
+  private hideSelected(): void {
+    if (this.selections.length === 0) return;
+    window.clearTimeout(this.nodeClickTimer);
+    this.openNodeGeneration += 1;
+    this.history.replaceCurrent(this.captureView());
+    for (const item of this.selections) {
+      (item.kind === "node" ? this.hiddenNodeIds : this.hiddenEdgeIds).add(item.id);
+    }
+    this.selection = null;
+    this.highlightedNodeId = null;
+    this.history.push(this.captureView());
+    this.renderPreservingCamera();
+  }
+
+  private showHidden(): void {
+    if (!this.hiddenNodeIds.size && !this.hiddenEdgeIds.size) return;
+    window.clearTimeout(this.nodeClickTimer);
+    this.openNodeGeneration += 1;
+    this.history.replaceCurrent(this.captureView());
+    this.hiddenNodeIds.clear();
+    this.hiddenEdgeIds.clear();
     this.history.push(this.captureView());
     this.renderPreservingCamera();
   }
@@ -766,13 +855,15 @@ export class PgmGraphViewer {
     if (!this.graph?.nodes.some((node) => node.id === nodeId)) return;
     window.clearTimeout(this.nodeClickTimer);
     this.openNodeGeneration += 1;
-    if (nodeId === this.localState.focusNodeId) {
+    if (nodeId === this.localState.focusNodeId && !this.hiddenNodeIds.has(nodeId)) {
       this.select({ kind: "node", id: nodeId });
       return;
     }
     this.history.replaceCurrent(this.captureView());
     this.highlightedNodeId = null;
     this.localState = refocusLocalGraph(this.localState, nodeId);
+    this.hiddenNodeIds.clear();
+    this.hiddenEdgeIds.clear();
     this.positions.clear();
     this.selection = { kind: "node", id: nodeId };
     this.fitGraphToPane = false;
@@ -787,7 +878,9 @@ export class PgmGraphViewer {
         focusNodeId: this.localState.focusNodeId,
         expandedNodeIds: new Set(this.localState.expandedNodeIds),
       },
-      selection: this.selection ? { ...this.selection } : null,
+      selections: this.selections.map((item) => ({ ...item })),
+      hiddenNodeIds: new Set(this.hiddenNodeIds),
+      hiddenEdgeIds: new Set(this.hiddenEdgeIds),
       highlightedNodeId: this.highlightedNodeId,
       query: this.query,
       positions: new Map([...this.positions].map(([id, node]) => [id, { ...node }])),
@@ -813,7 +906,9 @@ export class PgmGraphViewer {
       focusNodeId: entry.localState.focusNodeId,
       expandedNodeIds: new Set(entry.localState.expandedNodeIds),
     };
-    this.selection = entry.selection ? { ...entry.selection } : null;
+    this.selections = entry.selections.map((item) => ({ ...item }));
+    this.hiddenNodeIds = new Set(entry.hiddenNodeIds);
+    this.hiddenEdgeIds = new Set(entry.hiddenEdgeIds);
     this.highlightedNodeId = entry.highlightedNodeId;
     this.query = entry.query;
     this.positions = new Map([...entry.positions].map(([id, node]) => [id, { ...node }]));
@@ -847,13 +942,18 @@ export class PgmGraphViewer {
     if (!connection) return;
     const projection = projectLocalGraph(this.graph, this.localState);
     const revealsRelationships = !projection.edges.some((visible) => visible.id === edge.id);
-    if (!revealsRelationships) {
+    const revealsHidden = this.hiddenEdgeIds.has(connection.id)
+      || this.hiddenNodeIds.has(connection.source) || this.hiddenNodeIds.has(connection.target);
+    if (!revealsRelationships && !revealsHidden) {
       this.select({ kind: "edge", id: connection.id });
       return;
     }
     this.openNodeGeneration += 1;
     this.history.replaceCurrent(this.captureView());
-    this.localState = toggleLocalNodeExpansion(this.localState, nodeId);
+    if (revealsRelationships) this.localState = toggleLocalNodeExpansion(this.localState, nodeId);
+    this.hiddenEdgeIds.delete(connection.id);
+    this.hiddenNodeIds.delete(connection.source);
+    this.hiddenNodeIds.delete(connection.target);
     this.selection = { kind: "edge", id: connection.id };
     this.highlightedNodeId = null;
     this.history.push(this.captureView());
@@ -881,6 +981,8 @@ export class PgmGraphViewer {
   }
 
   private clearSurface(): void {
+    this.clearGraphGestures?.();
+    this.clearGraphGestures = null;
     this.clearPropertyPanelResize?.();
     this.clearPropertyPanelResize = null;
     this.resizeObserver?.disconnect();
@@ -1097,7 +1199,16 @@ export class PgmGraphViewer {
       node: PositionedPgmNode | undefined;
       capture: SVGElement;
       moved: boolean;
+      marquee: boolean;
+      end: { x: number; y: number };
     } | null = null;
+    let marquee: SVGRectElement | null = null;
+    const marqueeIds = (current: NonNullable<typeof gesture>): string[] => nodeIdsInMarquee(surface.nodes.values(), {
+      x1: (current.start.x - current.camera.x) / current.camera.scale,
+      y1: (current.start.y - current.camera.y) / current.camera.scale,
+      x2: (current.end.x - current.camera.x) / current.camera.scale,
+      y2: (current.end.y - current.camera.y) / current.camera.scale,
+    });
     const localPoint = (event: { clientX: number; clientY: number }) => {
       const bounds = svg.getBoundingClientRect();
       return {
@@ -1137,7 +1248,7 @@ export class PgmGraphViewer {
       const target = event.target as Element;
       if (target.closest(".pgm-node, .pgm-edge")) return;
       // The capture guard above suppresses clicks generated by a pan or drag.
-      this.select(null);
+      if (!event.shiftKey) this.select(null);
     });
     svg.addEventListener("pointerdown", (event) => {
       const startsPrimaryPointerSequence =
@@ -1149,15 +1260,18 @@ export class PgmGraphViewer {
       if (!startsPrimaryPointerSequence || event.ctrlKey || event.metaKey) return;
       const target = event.target as Element;
       const group = target.closest<SVGGElement>(".pgm-node");
-      if (!group && target.closest(".pgm-edge")) return;
+      const edge = target.closest<SVGGElement>(".pgm-edge");
+      if (!group && edge && !event.shiftKey) return;
       const node = group ? surface.nodes.get(group.dataset.nodeId ?? "") : undefined;
-      const capture = group ?? svg;
+      const capture = group ?? edge ?? svg;
       gesture = {
         pointerId: event.pointerId, start: localPoint(event), camera: { ...this.camera },
         wasFit: this.fitGraphToPane, node, capture, moved: false,
+        marquee: event.shiftKey, end: localPoint(event),
       };
       window.clearTimeout(this.nodeClickTimer);
       capture.setPointerCapture(event.pointerId);
+      svg.ownerDocument.addEventListener("keydown", cancelOnEscape, true);
     });
     svg.addEventListener("pointermove", (event) => {
       if (!gesture || gesture.pointerId !== event.pointerId) return;
@@ -1168,6 +1282,25 @@ export class PgmGraphViewer {
       event.preventDefault();
       gesture.moved = true;
       suppressClick = true;
+      gesture.end = point;
+      if (gesture.marquee) {
+        if (!marquee) {
+          marquee = svgElement("rect");
+          marquee.classList.add("pgm-selection-marquee");
+          marquee.setAttribute("aria-hidden", "true");
+          svg.append(marquee);
+          svg.classList.add("is-selecting");
+        }
+        marquee.setAttribute("x", String(Math.min(point.x, gesture.start.x)));
+        marquee.setAttribute("y", String(Math.min(point.y, gesture.start.y)));
+        marquee.setAttribute("width", String(Math.abs(dx)));
+        marquee.setAttribute("height", String(Math.abs(dy)));
+        const ids = new Set(marqueeIds(gesture));
+        surface.nodeLayer.querySelectorAll<SVGGElement>(".pgm-node").forEach((node) => {
+          node.classList.toggle("is-marquee-preview", ids.has(node.dataset.nodeId!));
+        });
+        return;
+      }
       this.fitGraphToPane = false;
       if (gesture.node) {
         gesture.capture.classList.add("is-dragging");
@@ -1184,13 +1317,18 @@ export class PgmGraphViewer {
         this.applyCamera();
       }
     });
-    const finish = (event: PointerEvent, cancel: boolean) => {
+    const finish = (event: { pointerId: number }, cancel: boolean) => {
       if (!gesture || gesture.pointerId !== event.pointerId) return;
       const current = gesture;
       gesture = null;
+      if (cancel) suppressClick = true;
+      svg.ownerDocument.removeEventListener("keydown", cancelOnEscape, true);
       current.capture.classList.remove("is-dragging");
-      svg.classList.remove("is-panning");
-      if (current.moved) {
+      svg.classList.remove("is-panning", "is-selecting");
+      marquee?.remove();
+      marquee = null;
+      surface.nodeLayer.querySelectorAll(".is-marquee-preview").forEach((node) => node.classList.remove("is-marquee-preview"));
+      if (current.moved && !current.marquee) {
         if (cancel) {
           this.camera = current.camera;
           this.fitGraphToPane = current.wasFit;
@@ -1200,6 +1338,19 @@ export class PgmGraphViewer {
         this.applyCamera();
       }
       if (current.capture.hasPointerCapture(event.pointerId)) current.capture.releasePointerCapture(event.pointerId);
+      if (current.marquee && current.moved && !cancel) {
+        const ids = marqueeIds(current);
+        if (ids.length) this.selectItems(mergeSelection(this.selections, ids.map((id) => ({ kind: "node", id }))));
+      }
+    };
+    const cancelOnEscape = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape" || !gesture) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      finish({ pointerId: gesture.pointerId }, true);
+    };
+    this.clearGraphGestures = () => {
+      if (gesture) finish({ pointerId: gesture.pointerId }, true);
     };
     svg.addEventListener("pointerup", (event) => finish(event, false));
     svg.addEventListener("pointercancel", (event) => finish(event, true));
@@ -1244,6 +1395,36 @@ export class PgmGraphViewer {
     const details = element("section", "pgm-selection-details");
     details.setAttribute("aria-live", "polite");
     details.setAttribute("aria-label", "Selected graph element details");
+    if (this.graph && this.selections.length > 1) {
+      details.classList.add("has-multiple-selection");
+      const heading = element("div", "pgm-details-heading");
+      const nodes = this.selections.filter((item) => item.kind === "node").length;
+      const edges = this.selections.length - nodes;
+      heading.append(
+        textElement("p", "Selection", "pgm-details-kicker"),
+        textElement("h3", `${this.selections.length} selected`),
+        textElement("p", `${nodes} concept${nodes === 1 ? "" : "s"} · ${edges} connection${edges === 1 ? "" : "s"}`, "pgm-details-hint"),
+        textElement("p", "Choose an item to inspect its properties.", "pgm-details-hint"),
+      );
+      const list = element("div", "pgm-selection-list");
+      const nodeById = new Map(this.graph.nodes.map((node) => [node.id, node]));
+      const edgeById = new Map(groupEdges(this.graph.edges).map((edge) => [edge.id, edge]));
+      for (const item of this.selections) {
+        const node = item.kind === "node" ? nodeById.get(item.id) : undefined;
+        const edge = item.kind === "edge" ? edgeById.get(item.id) : undefined;
+        const button = textElement("button", node ? nodeTitle(node) : edge?.types.join(" · ") ?? item.id, "pgm-selection-item");
+        button.type = "button";
+        if (edge) {
+          const label = (id: string) => { const node = nodeById.get(id); return node ? nodeLabel(node) : id; };
+          const direction = edge.forward && edge.reverse ? "↔" : edge.forward ? "→" : "←";
+          button.append(textElement("span", `${label(edge.source)} ${direction} ${label(edge.target)}`, "pgm-details-path"));
+        }
+        button.addEventListener("click", () => this.select(item));
+        list.append(button);
+      }
+      details.append(heading, list);
+      return details;
+    }
     if (!this.graph || !this.selection) {
       details.append(
         textElement("p", "Selection", "pgm-details-kicker"),

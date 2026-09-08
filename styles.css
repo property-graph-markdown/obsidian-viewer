@@ -338,6 +338,18 @@ body.pgm-has-maximized-viewer {
   cursor: grabbing;
 }
 
+.pgm-graph.is-selecting,
+.pgm-graph.is-selecting * {
+  cursor: crosshair;
+}
+
+.pgm-selection-marquee {
+  fill: color-mix(in srgb, var(--pgm-accent) 10%, transparent);
+  stroke: var(--pgm-accent);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
 .pgm-zoom-controls {
   position: absolute;
   right: 12px;
@@ -405,6 +417,7 @@ body.pgm-has-maximized-viewer {
 
 .pgm-node:hover .pgm-node-body,
 .pgm-node:focus-visible .pgm-node-body,
+.pgm-node.is-marquee-preview .pgm-node-body,
 .pgm-node.is-selected .pgm-node-body {
   fill: color-mix(in srgb, var(--pgm-node-color) 40%, var(--background-primary));
   stroke-width: 2.8;
@@ -491,9 +504,9 @@ body.pgm-has-maximized-viewer {
   fill: var(--pgm-accent);
 }
 
-.pgm-graph.has-selected-edge .pgm-edge:not(.is-selected):not(:hover):not(:focus-visible),
-.pgm-graph.has-selected-edge .pgm-node:not(.is-edge-endpoint):not(:hover):not(:focus-visible),
-.pgm-graph.has-selected-node .pgm-edge:not(.is-related):not(:hover):not(:focus-visible) {
+.pgm-graph.has-selected-edge .pgm-edge:not(.is-selected):not(.is-related):not(:hover):not(:focus-visible),
+.pgm-graph.has-selected-edge:not(.has-selected-node) .pgm-node:not(.is-selected):not(.is-marquee-preview):not(.is-edge-endpoint):not(:hover):not(:focus-visible),
+.pgm-graph.has-selected-node .pgm-edge:not(.is-selected):not(.is-related):not(:hover):not(:focus-visible) {
   opacity: 0.22;
 }
 
@@ -539,6 +552,35 @@ body.pgm-has-maximized-viewer {
 
 .pgm-details-heading {
   min-width: 0;
+}
+
+.pgm-selection-list {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pgm-viewer .pgm-selection-item {
+  height: auto;
+  padding: 6px 8px;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: var(--text-normal);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.pgm-selection-item .pgm-details-path {
+  display: block;
+}
+
+.pgm-viewer .pgm-selection-item:hover,
+.pgm-viewer .pgm-selection-item:focus-visible {
+  background: var(--background-modifier-hover);
 }
 
 .is-relationship-group > .pgm-details-heading,

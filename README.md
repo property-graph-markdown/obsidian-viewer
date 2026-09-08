@@ -94,6 +94,16 @@ requests. Your Markdown stays in your vault.
 - **Click a concept** to highlight its incoming and outgoing relationships,
   including their types and arrowheads. Other relationships fade. The initial
   overview stays neutral until you select a concept.
+- **Shift-click** concepts or connections to add or remove them from the
+  selection. **Shift-drag** draws a selection rectangle and adds the concepts
+  whose circle centres lie inside it, without moving the graph. Escape cancels
+  the rectangle. Keyboard users can toggle items with Shift+Enter or Shift+Space.
+- **Hide selected** temporarily hides the selected concepts and connections.
+  A hidden concept's incident connections disappear with it. **Show hidden**
+  restores hidden items; Back/Forward also restores visibility and selections.
+  Positions and zoom stay unchanged, and no Markdown is modified. Refocusing
+  starts a fresh neighbourhood; reloading the vault retains the current hidden
+  items. The property panel lists multiple selected items for individual inspection.
 - **Click the empty background** to clear the selection, its highlights, and
   the property panel. Panning or dragging keeps the current selection.
 - **Scroll or pinch on a trackpad** over the graph to zoom around the pointer.
@@ -105,7 +115,8 @@ requests. Your Markdown stays in your vault.
   you want to see the entire projection.
 - **Ctrl-click** on Windows/Linux or **Command-click** on macOS makes a concept
   the new focus. Keyboard users can use Ctrl/Command+Enter; Space toggles
-  expansion.
+  expansion. The **Focus** toolbar button performs the same focus action for
+  a single selected concept.
 - **Open selected** opens the selected concept note beside the graph and makes
   it the new graph focus. The viewer stays visible and an existing note pane is
   reused where possible. **Expand/Contract** performs the same disclosure action
