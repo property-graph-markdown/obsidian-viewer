@@ -98,7 +98,7 @@ export class PgmGraphViewer {
   private resizeObserver: ResizeObserver | null = null;
   private propertyPanelHeight: number | null = null;
   private clearPropertyPanelResize: (() => void) | null = null;
-  private camera = { x: 0, y: 0, scale: 0.4 };
+  private camera = { x: 0, y: 0, scale: 0.57 };
   private viewportSize = { width: 0, height: 0 };
   private fitScale = 1;
   private openNodeGeneration = 0;
@@ -957,7 +957,7 @@ export class PgmGraphViewer {
       const bounds = this.surface.viewport.getBBox();
       const centerX = focus?.x ?? bounds.x + bounds.width / 2;
       const centerY = focus ? focus.y - focus.height / 2 + NODE_RADIUS : bounds.y + bounds.height / 2;
-      // Start at 40% and retain the chosen zoom when refocusing.
+      // Start at 57% and retain the chosen zoom when refocusing.
       this.camera.x = width / 2 - centerX * this.camera.scale;
       this.camera.y = height / 2 - centerY * this.camera.scale;
       this.applyCamera();

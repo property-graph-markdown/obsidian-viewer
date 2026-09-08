@@ -23,7 +23,7 @@ requests. Your Markdown stays in your vault.
 - The graph starts at one focus concept and initially shows only its direct
   neighbours. Refocusing starts a fresh local view instead of drawing the
   entire vault as a global hairball.
-  The initial zoom is 40%, centred on the focus. Refocusing keeps the current
+  The initial zoom is 57%, centred on the focus. Refocusing keeps the current
   zoom; **Fit graph** shows the overview.
 - A PGM 0.4 YAML flow-map link title supplies complete relationship properties;
   a non-empty string `type` is also shown as its relationship type.
