@@ -338,7 +338,7 @@ export class PgmGraphViewer {
 
   private renderSummary(projection: LocalGraphProjection): HTMLElement {
     if (!this.graph) return textElement("p", "", "pgm-summary");
-    const matches = graphMatches(projection.nodes, projection.edges, this.query);
+    const matches = graphMatches(projection.nodes, projection.edges, this.query, this.localState.focusNodeId);
     const visibleNodes = matches.nodeIds.size;
     const visibleEdges = matches.edgeIds.size;
     const nodes = this.graph.nodes.length;
@@ -402,7 +402,7 @@ export class PgmGraphViewer {
   private renderSvg(nodes: PgmNode[], edges: PgmEdge[]): SVGSVGElement {
     // Lay out the full projection before filtering, retaining every cached
     // position when typing or clearing a query.
-    const matches = graphMatches(nodes, edges, this.query);
+    const matches = graphMatches(nodes, edges, this.query, this.localState.focusNodeId);
     const positioned = this.positionNodes(nodes, edges).filter((node) => matches.nodeIds.has(node.id));
     const byId = new Map(positioned.map((node) => [node.id, node]));
     const visibleEdges = edges.filter((edge) => matches.edgeIds.has(edge.id));
@@ -555,7 +555,7 @@ export class PgmGraphViewer {
     label.classList.add("pgm-node-label");
     label.setAttribute("x", String(node.width / 2));
     label.setAttribute("text-anchor", "middle");
-    const firstBaseline = NODE_LABEL_TOP + 26;
+    const firstBaseline = NODE_LABEL_TOP + 28;
     presentation.lines.forEach((line, index) => {
       const span = svgElement("tspan");
       span.setAttribute("x", String(node.width / 2));
@@ -1291,7 +1291,7 @@ function measureEdgeCaption(caption: EdgeCaption, maxWidth: number): void {
     text.textContent = low > 0 ? characters.slice(0, low).join("") + "…" : "";
   }
   caption.width = text.textContent ? text.getComputedTextLength() + 12 : 0;
-  caption.height = text.textContent ? 22 : 0;
+  caption.height = text.textContent ? 24 : 0;
   caption.measuredWidth = maxWidth;
   for (const rectangle of [hit, gap]) {
     rectangle.setAttribute("x", String(-caption.width / 2));

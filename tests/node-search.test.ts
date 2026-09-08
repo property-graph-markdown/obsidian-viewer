@@ -83,6 +83,35 @@ describe("graphMatches", () => {
     expect({ nodes, edges }).toEqual(snapshot);
   });
 
+  it("retains the focus and all relationships between visible endpoints without exposing other neighbours", () => {
+    const edges = [
+      edge("outgoing", "person", "meeting"),
+      edge("duplicate", "person", "meeting"),
+      edge("incoming", "translation", "person"),
+      edge("between-matches", "meeting", "translation"),
+      edge("unmatched-neighbour", "person", "paper"),
+      edge("unmatched-endpoint", "meeting", "paper"),
+      edge("unresolved", "person", "missing", false),
+    ];
+    const result = graphMatches(nodes, edges, "Event Ada", "person");
+
+    expect([...result.nodeIds]).toEqual(["person", "meeting", "translation"]);
+    expect([...result.edgeIds]).toEqual(["outgoing", "duplicate", "incoming", "between-matches"]);
+  });
+
+  it("keeps only the current focus when no titles match", () => {
+    const edges = [edge("connected", "person", "meeting")];
+    expect([...graphMatches(nodes, edges, "unmatched", "person").nodeIds]).toEqual(["person"]);
+    const changedFocus = graphMatches(nodes, edges, "unmatched", "meeting");
+    expect([...changedFocus.nodeIds]).toEqual(["meeting"]);
+    expect([...changedFocus.edgeIds]).toEqual([]);
+  });
+
+  it("does not invent an absent focus or duplicate a focus that already matches", () => {
+    expect([...graphMatches(nodes, [], "Event Ada", "missing").nodeIds]).toEqual(["meeting", "translation"]);
+    expect([...graphMatches(nodes, [], "Event Ada", "meeting").nodeIds]).toEqual(["meeting", "translation"]);
+  });
+
   it("returns no nodes or relationships when titles do not match, without exposing neighbours", () => {
     const edges = [edge("hidden", "person", "meeting")];
     const result = graphMatches(nodes, edges, "unmatched");

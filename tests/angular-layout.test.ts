@@ -123,7 +123,7 @@ describe("spreadFocusEdges", () => {
       polarNode("middle", focus, 1100, 90.05, 256),
       polarNode("far", focus, 1700, 90.1, 168),
     ];
-    const bystander = node("bystander", 250, 500);
+    const bystander = node("bystander", NODE_WIDTH + LOCAL_GRAPH_NODE_GAP + 16, 500);
     const nodes = [focus, ...members, bystander];
     const edges = members.map(({ id }) => edge(`focus-${id}`, "focus", id));
     expectNoOverlaps(nodes);

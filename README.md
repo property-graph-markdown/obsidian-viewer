@@ -49,8 +49,9 @@ requests. Your Markdown stays in your vault.
   including occurrences beyond the current projection. Its relationship count
   jumps to that list. Selecting an entry shows the connection's full properties
   and reveals its neighbours if needed, preserving the current zoom and pan.
-- Search keeps only nodes whose displayed `Type: Title` contains every entered
-  keyword, ignoring case, and relationships between those matching nodes.
+- Search keeps nodes whose displayed `Type: Title` contains every entered
+  keyword, ignoring case. The central focus node always stays visible, along
+  with relationships connecting it to matching nodes and those between matches.
   It filters the current local projection while preserving node positions,
   zoom, and pan; clearing the search restores the full projection.
 - Canonical PGM relationship links gain a small direction badge and their

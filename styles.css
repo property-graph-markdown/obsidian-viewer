@@ -395,7 +395,7 @@ body.pgm-has-maximized-viewer {
 
 .pgm-node-label {
   fill: var(--text-normal);
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 400;
   pointer-events: none;
   user-select: none;
@@ -438,7 +438,7 @@ body.pgm-has-maximized-viewer {
   stroke-linejoin: round;
   paint-order: stroke;
   font-family: var(--font-interface);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
   dominant-baseline: central;
   pointer-events: none;
