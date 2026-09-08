@@ -68,7 +68,7 @@ interface ParsedLink {
   title: string | null;
 }
 
-interface ParsedRelationshipProperties {
+export interface ParsedPgmRelationshipProperties {
   properties: PgmProperties;
   type?: string;
   diagnostic?: Pick<PgmDiagnostic, "code" | "message">;
@@ -189,7 +189,7 @@ export function parsePgmVault(documents: PgmDocument[]): PgmGraph {
         continue;
       }
 
-      const relationship = parseRelationshipProperties(link.title);
+      const relationship = parsePgmRelationshipProperties(link.title);
       const id = `pgm-edge:${encodeURIComponent(concept.id)}:${relationshipOccurrence}`;
       relationshipOccurrence += 1;
 
@@ -530,7 +530,17 @@ function markdownTokenText(token: MarkdownToken): string {
   return "";
 }
 
-function parseRelationshipProperties(title: string | null): ParsedRelationshipProperties {
+/**
+ * Parse the optional YAML Flow Mapping carried by a Markdown Link title.
+ *
+ * This is exported so Markdown renderers can classify Relationship links with
+ * exactly the same YAML rules as the graph parser. A title is renderable as a
+ * typed PGM Relationship only when the returned `type` is present and no
+ * diagnostic is returned.
+ */
+export function parsePgmRelationshipProperties(
+  title: string | null,
+): ParsedPgmRelationshipProperties {
   if (title === null) {
     return { properties: {} };
   }
@@ -569,7 +579,7 @@ function parseRelationshipProperties(title: string | null): ParsedRelationshipPr
   };
 }
 
-function invalidRelationshipProperties(message: string): ParsedRelationshipProperties {
+function invalidRelationshipProperties(message: string): ParsedPgmRelationshipProperties {
   return {
     properties: {},
     diagnostic: {
@@ -579,7 +589,26 @@ function invalidRelationshipProperties(message: string): ParsedRelationshipPrope
   };
 }
 
-function resolveConceptDestination(destination: string, sourceId: string): string {
+interface ParsedConceptDestination {
+  readonly absolute: boolean;
+  readonly decodedSegments: string[];
+}
+
+/**
+ * Whether a normalized CommonMark Link destination has the path shape accepted
+ * by the PGM reader. Source-relative `..` resolution is intentionally left to
+ * `resolveConceptDestination`, where the source Concept ID is available.
+ */
+export function isPgmConceptDestinationSyntax(destination: string): boolean {
+  try {
+    parseConceptDestinationSyntax(destination);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function parseConceptDestinationSyntax(destination: string): ParsedConceptDestination {
   if (destination.length === 0) {
     throw new DestinationError("Empty Link destination is not a Concept destination.");
   }
@@ -610,6 +639,12 @@ function resolveConceptDestination(destination: string, sourceId: string): strin
   if (finalSegment === "index.md" || finalSegment === "log.md") {
     throw new DestinationError("Reserved document is not a Concept destination.");
   }
+
+  return { absolute, decodedSegments };
+}
+
+function resolveConceptDestination(destination: string, sourceId: string): string {
+  const { absolute, decodedSegments } = parseConceptDestinationSyntax(destination);
 
   const result = absolute ? [] : sourceId.split("/").slice(0, -1);
   for (const segment of decodedSegments) {

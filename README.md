@@ -1,10 +1,12 @@
 # PGM Viewer for Obsidian
 
-A quiet, single-purpose graph view for
+A focused graph view for
 [Property Graph Markdown](https://github.com/property-graph-markdown/specification)
-vaults. Open it from the ribbon or run **PGM Viewer: Open graph view**.
+vaults. It opens in Obsidian's right sidebar from the ribbon or with **PGM
+Viewer: Open graph view**.
 
-PGM Viewer is independent, non-commercial free software. It contains no
+PGM Viewer is independent open-source software under the MIT License. The
+Obsidian plugin contains no
 telemetry, analytics, advertising, remote assets, update mechanism, or network
 requests. Your Markdown stays in your vault.
 
@@ -12,18 +14,79 @@ requests. Your Markdown stays in your vault.
 
 - Every non-reserved `.md` concept with a non-empty string `type` in YAML
   frontmatter becomes a node.
+- Concepts appear as circles with stable colours based on their type, in both
+  light and dark themes. A borderless background that fades outward below
+  each circle shows **Type: Title** and wraps long titles onto as many lines
+  as needed. Node height and overlap protection account for the circle and
+  its full title.
 - Every Markdown Concept Link becomes a directed relationship occurrence.
+- The graph starts at one focus concept and initially shows only its direct
+  neighbours. Refocusing starts a fresh local view instead of drawing the
+  entire vault as a global hairball.
 - A PGM 0.4 YAML flow-map link title supplies complete relationship properties;
   a non-empty string `type` is also shown as its relationship type.
-- Every relationship type is written directly along its arrow. Labels stay
-  deliberately quiet in dense graphs, then become clear on hover, keyboard
-  focus, selection, or when connected to the selected concept. The documented
-  compatibility edge without a type is honestly labelled `untyped`.
+- Relationship types sit directly in a gap at the middle of their arrow,
+  with a straight baseline aligned to its tangent and a readable orientation.
+  Parallel relationships use separate curves. Text, arrows, and nodes zoom
+  together; captions never detach from their relationships. A type that is too
+  long for its arrow is shortened with an ellipsis; its complete value remains
+  available in the tooltip and property strip. The documented compatibility
+  edge without a type is honestly labelled `untyped`.
+- Neutral arrows and a plain background keep the overview quiet. Hovering or
+  selecting a relationship accents that arrow; selecting it also fades other
+  relationships and concepts outside its two endpoints.
 - Unresolved concept targets remain relationships and are drawn with a dashed
   line and hollow endpoint; the viewer does not invent a node for them.
-- Search filters names, IDs, types, link text, and property values.
-- Select a relationship to inspect it. Selecting a node opens its source note in
-  a new tab.
+- Selecting a concept or relationship shows its properties in a compact,
+  read-only strip below the graph. Property names and values use larger,
+  high-contrast text that wraps and can be selected for copying.
+- Search matches names, IDs, types, link text, and property values inside the
+  current local projection; it does not reveal unrelated vault content.
+- Canonical PGM relationship links gain a small direction badge and their
+  relationship type in Reading View and Live Preview. Hovering over the badge
+  shows all relationship properties, including nested values, in its tooltip.
+  Moving the editor caret into the link exposes its original Markdown for
+  direct editing.
+
+## Explore the local graph
+
+- **Drag a concept** to move it; its relationships follow. Selecting a concept
+  or relationship preserves the current node positions and viewport.
+- **Click a concept** to highlight its incoming and outgoing relationships,
+  including their types and arrowheads. Other relationships fade. The initial
+  overview stays neutral until you select a concept.
+- **Scroll or pinch on a trackpad** over the graph to zoom around the pointer.
+  Drag the empty background to pan. The corner controls also zoom in and out,
+  show the current zoom level, and fit the graph to the pane.
+- **Double-click** a concept to expand or contract its relationships. Expansion
+  can be repeated from already visible concepts; contraction hides the branch
+  again.
+- **Ctrl-click** on Windows/Linux or **Command-click** on macOS makes a concept
+  the new focus. Keyboard users can use Ctrl/Command+Enter; Space toggles
+  expansion.
+- **Open selected** opens the selected concept note beside the graph and makes
+  it the new graph focus. The viewer stays visible and an existing note pane is
+  reused where possible. **Expand/Contract** performs the same disclosure action
+  from the toolbar.
+- **Fit graph** fits the current projection into the available pane. **Reload**
+  reparses the vault. **Maximize/Restore view** toggles the graph between the
+  right sidebar and a workspace-filling overlay.
+- The active **Graph** tab identifies this as the graph view; no additional
+  proprietary view is implied.
+
+The viewer stays minimal and read-only: explore relationships, inspect their
+properties, and navigate to concepts. Editing happens in the Markdown editor.
+Its generic graph layout provides size-aware collision avoidance.
+
+The OSS viewer for Obsidian and the web demo on **pgm.md** can share a rendering
+core in [`src/graph-viewer.ts`](src/graph-viewer.ts). `PgmGraphViewer` receives
+graph data and navigation through `GraphViewerHost`; it has no Obsidian runtime
+dependency. [`src/main.ts`](src/main.ts) supplies the Obsidian adapter. A browser
+host can use the same controller and [`styles.css`](styles.css).
+
+**Pegana on pegana.net is a separate, independent codebase.** Its proprietary
+Graph-to-Mindmap editor, editing tools, and Inspector are outside this OSS
+viewer. Code is shared within the OSS viewer, with no imports from Pegana.
 
 For example:
 
@@ -37,7 +100,7 @@ born: 1815
 Worked with [Charles Babbage](charles-babbage.md "{type: collaborated_with, from: 1833}").
 ```
 
-This small viewer focuses on inspection. It is not a PGM conformance validator
+This small viewer focuses on local exploration. It is not a PGM conformance validator
 and does not claim to implement every portable YAML value or diagnostic required
 by the PGM 0.4 public draft. Use the reference parser from the
 [PGM specification repository](https://github.com/property-graph-markdown/specification)
@@ -66,6 +129,11 @@ canonical [PGM 0.4.0 Ada Demo Vault](https://github.com/property-graph-markdown/
 46 Concept Nodes, 124 Relationship occurrences, and zero parser warnings. All
 but one documented OKF compatibility relationship are typed, and useful link
 properties are retained.
+
+Use this canonical vault for the demo. Ada's initial local view contains Ada
+and 41 directly connected concepts (42 nodes), with 57 incoming and outgoing
+relationship occurrences. The vault contains 46 concepts overall; further
+concepts can be reached by expanding or refocusing neighbouring nodes.
 
 Obsidian plugins are installed per vault. Copy the three plugin files from the
 release ZIP into `example-vault/.obsidian/plugins/pgm-viewer/`, then choose
