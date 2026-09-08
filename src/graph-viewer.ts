@@ -840,14 +840,29 @@ export class PgmGraphViewer {
     const dx = oldFocus && newFocus ? oldFocus.x - newFocus.x : 0;
     const dy = oldFocus && newFocus ? oldFocus.y - newFocus.y : 0;
     const initial = new Map(layout?.nodes.map((node) => [node.id, node]));
+    const typeOffsets = new Map<string, { x: number; y: number; count: number }>();
+    for (const node of nodes) {
+      if (node.id === focusId) continue;
+      const previous = this.positions.get(node.id);
+      const seed = initial.get(node.id);
+      if (!previous || !seed) continue;
+      const offset = typeOffsets.get(node.type) ?? { x: 0, y: 0, count: 0 };
+      offset.x += previous.x - seed.x;
+      offset.y += previous.y - seed.y;
+      offset.count += 1;
+      typeOffsets.set(node.type, offset);
+    }
     const positioned = nodes.map((node) => {
       const previous = this.positions.get(node.id);
       const seed = initial.get(node.id);
+      // New neighbours join the existing type group, even after that group
+      // has moved or its share of the newly computed layout has changed.
+      const offset = typeOffsets.get(node.type);
       const { width, height } = nodePresentation(node);
       return {
         ...node, width, height,
-        x: previous?.x ?? (seed?.x ?? 0) + dx,
-        y: previous?.y ?? (seed?.y ?? 0) + dy,
+        x: previous?.x ?? (seed?.x ?? 0) + (offset ? offset.x / offset.count : dx),
+        y: previous?.y ?? (seed?.y ?? 0) + (offset ? offset.y / offset.count : dy),
       };
     });
     // Resolve automatic placement only. A redraw must preserve the user's

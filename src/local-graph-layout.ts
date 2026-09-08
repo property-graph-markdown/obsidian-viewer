@@ -1,5 +1,5 @@
 import type { PgmEdge, PgmNode } from "./pgm";
-import { NODE_MIN_HEIGHT, NODE_WIDTH, nodePresentation } from "./node-presentation";
+import { NODE_MIN_HEIGHT, NODE_WIDTH, nodeLabel, nodePresentation } from "./node-presentation";
 
 /** Default dimensions; individual nodes carry their measured label dimensions. */
 export const LOCAL_GRAPH_NODE_WIDTH = NODE_WIDTH;
@@ -33,6 +33,7 @@ interface SimulationNode {
   velocityX: number;
   velocityY: number;
   readonly fixed: boolean;
+  anchor?: { x: number; y: number };
 }
 
 interface LayoutEdge {
@@ -50,14 +51,17 @@ const VELOCITY_DECAY = 0.76;
 const MAX_STEP = 12;
 const ITERATIONS = 220;
 const COLLISION_EPSILON = 0.001;
+const TYPE_ANCHOR_STRENGTH = 0.16;
+const CLUSTER_ASPECT = 1.35;
 
 /**
  * Lay out a visible local graph without mutating it.
  *
  * The algorithm intentionally has no tree, level, ownership, or traversal
- * semantics. Nodes start on a deterministic radial seed and settle under
- * ordinary repulsion, edge springs, and a weak pull towards the focus. The
- * visible focus is pinned at the centre for the complete simulation.
+ * semantics. Different types occupy adjacent sectors around the focus, with
+ * larger groups arranged on several arcs. Soft position anchors retain those
+ * groups while repulsion and edge springs relax the layout. A single type
+ * uses the ordinary radial seed. The visible focus stays pinned at the centre.
  *
  * Node IDs are expected to be unique, as they are in a parsed PGM graph. If
  * the requested focus is not present, the first node by ID is used as a stable
@@ -104,6 +108,7 @@ export function layoutLocalGraph(
     };
   });
 
+  arrangeTypeSectors(simulationNodes);
   const layoutEdges = indexLayoutEdges(simulationNodes, edges);
   settle(simulationNodes, layoutEdges);
   const positionedNodes = resolveNodeOverlaps(
@@ -137,6 +142,109 @@ export function layoutLocalGraph(
     width,
     height,
   };
+}
+
+/** Grouping is visual only: every concept remains an individual graph node. */
+function arrangeTypeSectors(nodes: SimulationNode[]): void {
+  const groups = new Map<string, SimulationNode[]>();
+  const focus = nodes.find((node) => node.fixed);
+  for (const node of nodes) {
+    if (node.fixed) continue;
+    const group = groups.get(node.node.type) ?? [];
+    group.push(node);
+    groups.set(node.node.type, group);
+  }
+  if (groups.size < 2 || !focus) return;
+
+  // Sublinear area weighting leaves small types enough angular room; larger
+  // types use extra arcs. Balance the two largest groups across the focus.
+  const weight = (group: SimulationNode[]) => Math.pow(group.reduce((sum, node) =>
+    sum + (node.width + LOCAL_GRAPH_NODE_GAP) * (node.height + LOCAL_GRAPH_NODE_GAP), 0), 0.7);
+  const ranked = [...groups].sort(([leftType, left], [rightType, right]) =>
+    weight(right) - weight(left) || compareText(leftType, rightType));
+  const sides: [typeof ranked, typeof ranked] = [[], []];
+  const sideWeight = [0, 0];
+  for (const group of ranked.slice(2)) {
+    const side = sideWeight[0]! <= sideWeight[1]! ? 0 : 1;
+    sides[side].push(group);
+    sideWeight[side] = sideWeight[side]! + weight(group[1]);
+  }
+  const types = [ranked[0]!, ...sides[0], ranked[1]!, ...sides[1]];
+  const totalWeight = types.reduce((sum, [, group]) => sum + weight(group), 0);
+  const gutter = Math.min(0.12, Math.PI / (types.length * 4));
+  const minimumSpan = Math.min(0.28, Math.PI / types.length);
+  const available = Math.PI * 2 - types.length * (gutter + minimumSpan);
+  const placed = [focus];
+  let start = -(minimumSpan + available * weight(types[0]![1]) / totalWeight) / 2;
+
+  for (const [, group] of types) {
+    group.sort((left, right) => chronologicalKey(left.node) - chronologicalKey(right.node)
+      || compareText(nodeLabel(left.node), nodeLabel(right.node))
+      || compareText(left.node.id, right.node.id));
+    const span = minimumSpan + available * weight(group) / totalWeight;
+    const largest = Math.max(...group.map((node) => Math.max(node.width, node.height)));
+    const radialStep = largest + LOCAL_GRAPH_NODE_GAP + 24;
+    let radius = Math.max(300, (Math.max(focus.width, focus.height) + largest) / 2 + 90);
+    let offset = 0;
+    let ring = 0;
+
+    while (offset < group.length) {
+      let count = Math.min(group.length - offset,
+        Math.max(1, Math.ceil(span * radius * CLUSTER_ASPECT / (largest + LOCAL_GRAPH_NODE_GAP))));
+      let row: SimulationNode[] = [];
+      // Choose the fullest arc that fits complete circle-and-title footprints.
+      for (; count > 0; count -= 1) {
+        row = group.slice(offset, offset + count).map((node, index) => {
+          const stagger = ring === 0 ? 0 : ring % 2 === 1 ? 0.24 : -0.24;
+          const angle = start + span * (index + 0.5 + stagger) / count;
+          return { ...node, x: Math.cos(angle) * radius * CLUSTER_ASPECT, y: Math.sin(angle) * radius };
+        });
+        if (row.every((node, index) => [...placed, ...row.slice(0, index)]
+          .every((other) => !simulationOverlap(node, other)))) break;
+      }
+      if (count > 0) {
+        row.forEach((position, index) => {
+          const node = group[offset + index]!;
+          node.x = position.x;
+          node.y = position.y;
+          node.anchor = { x: position.x, y: position.y };
+          placed.push(node);
+        });
+        offset += count;
+      }
+      radius += radialStep;
+      ring += 1;
+    }
+    start += span + gutter;
+  }
+}
+
+function simulationOverlap(left: SimulationNode, right: SimulationNode): boolean {
+  return Math.abs(left.x - right.x) < (left.width + right.width) / 2 + LOCAL_GRAPH_NODE_GAP + 12
+    && Math.abs(left.y - right.y) < (left.height + right.height) / 2 + LOCAL_GRAPH_NODE_GAP + 12;
+}
+
+/** Comparable calendar order, without implying proportional temporal distances. */
+function chronologicalKey(node: PgmNode): number {
+  for (const key of ["date", "year", "from"]) {
+    const value = node.properties[key];
+    if (typeof value === "number" && Number.isInteger(value) && Number.isFinite(value)) {
+      return value * 10000 + 101;
+    }
+    const text = value instanceof Date && Number.isFinite(value.getTime())
+      ? value.toISOString().slice(0, 10) : value;
+    if (typeof text !== "string") continue;
+    const match = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/.exec(text);
+    if (!match) continue;
+    const year = Number(match[1]);
+    const month = Number(match[2] ?? 1);
+    const day = Number(match[3] ?? 1);
+    const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    const monthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (month < 1 || month > 12 || day < 1 || day > (monthDays[month - 1] ?? 0)) continue;
+    return year * 10000 + month * 100 + day;
+  }
+  return Infinity;
 }
 
 /**
@@ -281,8 +389,13 @@ function settle(nodes: SimulationNode[], edges: readonly LayoutEdge[]): void {
       const current = nodes[index];
       if (current === undefined || current.fixed) continue;
 
-      forceX[index] = (forceX[index] ?? 0) - current.x * CENTERING_STRENGTH;
-      forceY[index] = (forceY[index] ?? 0) - current.y * CENTERING_STRENGTH;
+      if (current.anchor) {
+        forceX[index] = (forceX[index] ?? 0) + (current.anchor.x - current.x) * TYPE_ANCHOR_STRENGTH;
+        forceY[index] = (forceY[index] ?? 0) + (current.anchor.y - current.y) * TYPE_ANCHOR_STRENGTH;
+      } else {
+        forceX[index] = (forceX[index] ?? 0) - current.x * CENTERING_STRENGTH;
+        forceY[index] = (forceY[index] ?? 0) - current.y * CENTERING_STRENGTH;
+      }
 
       current.velocityX = (current.velocityX + (forceX[index] ?? 0)) * VELOCITY_DECAY;
       current.velocityY = (current.velocityY + (forceY[index] ?? 0)) * VELOCITY_DECAY;

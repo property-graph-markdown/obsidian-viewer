@@ -13,12 +13,12 @@ import {
 import { nodePresentation } from "../src/node-presentation";
 import type { PgmEdge, PgmNode } from "../src/pgm";
 
-function node(id: string): PgmNode {
+function node(id: string, type = "Thing"): PgmNode {
   return {
     id,
     path: `${id}.md`,
-    type: "Thing",
-    properties: { type: "Thing", name: id },
+    type,
+    properties: { type, name: id },
   };
 }
 
@@ -53,6 +53,41 @@ function fixture(): { nodes: PgmNode[]; edges: PgmEdge[] } {
       edge("self", "epsilon", "epsilon"),
       edge("unresolved", "focus", "not-visible"),
     ],
+  };
+}
+
+function mixedTypeFixture(): { nodes: PgmNode[]; edges: PgmEdge[] } {
+  const groups = [
+    { type: "Archive fragment", count: 20 },
+    { type: "archive fragment", count: 10 },
+    { type: "λ:Signal/v2", count: 4 },
+  ];
+  let index = 0;
+  const members = groups.flatMap(({ type, count }) => Array.from({ length: count }, () => {
+    // Interleave IDs independently of type so ID sorting cannot create clusters.
+    const slot = index++ * 13 % 34;
+    const current = node(`item-${String(slot).padStart(2, "0")}`, type);
+    return {
+      ...current,
+      properties: {
+        ...current.properties,
+        name: `Item ${slot} ${"with measured title detail ".repeat(slot % 5)}`,
+      },
+    };
+  }));
+
+  return {
+    nodes: [node("focus", "Navigation origin"), ...members],
+    // All types have the same connectivity; clustering must come from their types.
+    edges: members.map(({ id }) => edge(`focus-${id}`, "focus", id)),
+  };
+}
+
+function layoutGeometry(layout: LocalGraphLayout) {
+  return {
+    width: layout.width,
+    height: layout.height,
+    nodes: layout.nodes.map(({ id, x, y, width, height }) => ({ id, x, y, width, height })),
   };
 }
 
@@ -208,6 +243,109 @@ describe("layoutLocalGraph", () => {
     expectFiniteAndInBounds(layout);
     expectNoOverlaps(layout.nodes);
   });
+
+  it("clusters unbalanced exact types around the pinned focus while protecting full title footprints", () => {
+    const graph = mixedTypeFixture();
+    const layout = layoutLocalGraph(graph.nodes, graph.edges, "focus");
+    const members = layout.nodes.filter(({ id }) => id !== "focus");
+    const sameTypeNeighbours = members.filter((current) => {
+      const neighbours = layout.nodes.filter(({ id }) => id !== current.id);
+      const distance = (other: PositionedPgmNode): number => Math.hypot(
+        current.x - other.x, current.y - other.y,
+      );
+      const nearestDistance = Math.min(...neighbours.map(distance));
+      return neighbours.some((other) => other.type === current.type
+        && distance(other) <= nearestDistance + 0.000001);
+    });
+
+    expect(sameTypeNeighbours.length / members.length).toBeGreaterThanOrEqual(0.7);
+    expectFiniteAndInBounds(layout);
+    expectNoOverlaps(layout.nodes);
+    expect(new Set(layout.nodes.map(({ height }) => height)).size).toBeGreaterThan(1);
+    for (const current of layout.nodes) {
+      const { width, height } = nodePresentation(current);
+      expect(current).toMatchObject({ width, height });
+    }
+    expect(layout.nodes.find(({ id }) => id === "focus")).toMatchObject({
+      x: layout.width / 2,
+      y: layout.height / 2,
+    });
+  });
+
+  it("keeps mixed-type clustering deterministic across input permutations without mutating the graph", () => {
+    const graph = mixedTypeFixture();
+    const snapshot = structuredClone(graph);
+    const layout = layoutLocalGraph(graph.nodes, graph.edges, "focus");
+    const interleaved = [
+      ...graph.nodes.filter((_, index) => index % 2 === 1),
+      ...graph.nodes.filter((_, index) => index % 2 === 0),
+    ];
+
+    expect(layoutLocalGraph(graph.nodes.slice().reverse(), graph.edges.slice().reverse(), "focus"))
+      .toEqual(layout);
+    expect(layoutLocalGraph(interleaved, [...graph.edges.slice(11), ...graph.edges.slice(0, 11)], "focus"))
+      .toEqual(layout);
+    expect(graph).toEqual(snapshot);
+  });
+
+  it("orders dated members by chronology without making spacing proportional to elapsed time", () => {
+    const records: PgmNode[] = [
+      { ...node("a", "Temporal record"), properties: { name: "A", date: "1900-02-03" } },
+      { ...node("b", "Temporal record"), properties: { name: "B", year: 1800 } },
+      { ...node("c", "Temporal record"), properties: { name: "C", from: "1850-11" } },
+      { ...node("d", "Temporal record"), properties: { name: "D", date: "2000" } },
+      node("undated", "Temporal record"),
+      node("context", "Context record"),
+    ];
+    const focus = node("focus", "Navigation origin");
+    const edges = records.map(({ id }) => edge(`focus-${id}`, "focus", id));
+    const layout = layoutLocalGraph([focus, ...records], edges, "focus");
+    const stretchedProperties: Record<string, PgmNode["properties"]> = {
+      a: { date: "1601-02-03" },
+      b: { year: 1000 },
+      c: { from: "1600" },
+      d: { date: "2200" },
+    };
+    const stretchedDates = records.map((record) => ({
+      ...record,
+      properties: {
+        ...record.properties,
+        ...stretchedProperties[record.id],
+      },
+    }));
+    const changedOrder = records.map((record) => record.id === "b"
+      ? { ...record, properties: { ...record.properties, year: 2100 } }
+      : record);
+
+    expect(layoutGeometry(layoutLocalGraph([focus, ...stretchedDates], edges, "focus")))
+      .toEqual(layoutGeometry(layout));
+    expect(layoutGeometry(layoutLocalGraph([focus, ...changedOrder], edges, "focus")))
+      .not.toEqual(layoutGeometry(layout));
+    expectFiniteAndInBounds(layout);
+    expectNoOverlaps(layout.nodes);
+  });
+
+  it.each([null, "missing", "singleton-16"])(
+    "keeps many arbitrary singleton types finite and collision-free with focus %s",
+    (focusId) => {
+      const specialTypes = ["Thing", "thing", "Thing ", "Δ", "測定", "__proto__", "constructor", ""];
+      const nodes = Array.from({ length: 36 }, (_, index) => ({
+        ...node(`singleton-${String(index).padStart(2, "0")}`, specialTypes[index] ?? `Custom/type-${index}`),
+        properties: { name: `Isolated ${index} ${"long label ".repeat(index % 4)}` },
+      }));
+      const layout = layoutLocalGraph(nodes, [], focusId);
+      const expectedFocusId = focusId === "singleton-16" ? focusId : "singleton-00";
+
+      expect(layout.nodes).toHaveLength(nodes.length);
+      expectFiniteAndInBounds(layout);
+      expectNoOverlaps(layout.nodes);
+      expect(layoutLocalGraph(nodes.slice().reverse(), [], focusId)).toEqual(layout);
+      expect(layout.nodes.find(({ id }) => id === expectedFocusId)).toMatchObject({
+        x: layout.width / 2,
+        y: layout.height / 2,
+      });
+    },
+  );
 });
 
 describe("resolveNodeOverlaps", () => {

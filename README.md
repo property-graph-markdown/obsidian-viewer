@@ -59,6 +59,12 @@ requests. Your Markdown stays in your vault.
 
 ## Explore the local graph
 
+- **Automatic layout** groups neighbouring concepts by their exact type.
+  The largest groups sit on opposite sides of the focus; smaller groups occupy
+  the space between them. Large groups use staggered arcs with room for full
+  titles. Valid `date`, `year`, or `from` properties order each group's concepts
+  chronologically, with title/ID as a fallback; spacing does not represent time.
+  These are individual movable nodes, with no group boxes or collapsed data.
 - **Back / Forward** revisit concept and relationship selections, graph focus
   changes, and expanded or contracted branches. Each step restores its
   expanded branches, manual node positions, selection, search, zoom, and pan.
