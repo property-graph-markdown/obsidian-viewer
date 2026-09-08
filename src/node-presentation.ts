@@ -4,8 +4,9 @@ import type { PgmNode } from "./pgm";
 export const NODE_WIDTH = 216;
 export const NODE_RADIUS = 36;
 export const NODE_LABEL_TOP = 60;
-export const NODE_MIN_HEIGHT = 98;
-export const NODE_LABEL_LINE_HEIGHT = 18;
+export const NODE_MIN_HEIGHT = 102;
+export const NODE_LABEL_LINE_HEIGHT = 22;
+const LABEL_FONT_SCALE = 16 / 13;
 const LABEL_WIDTH = NODE_WIDTH - 36;
 const LABEL_VERTICAL_PADDING = 20;
 // A bounded palette avoids almost-identical adjacent hues. Types remain
@@ -124,14 +125,14 @@ export function graphemes(value: string): string[] {
   return result;
 }
 
-/** Conservative estimates for a 13px UI font, with spare padding. */
+/** Scale the conservative 13px glyph estimates to the 16px UI font. */
 function glyphWidth(glyph: string): number {
-  if (/^\s$/u.test(glyph)) return 4;
-  if (/\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u1100-\u11ff\u2e80-\ua4cf\uac00-\ud7af\uf900-\ufaff\uff01-\uff60]/u.test(glyph)) return 15;
+  if (/^\s$/u.test(glyph)) return 4 * LABEL_FONT_SCALE;
+  if (/\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u1100-\u11ff\u2e80-\ua4cf\uac00-\ud7af\uf900-\ufaff\uff01-\uff60]/u.test(glyph)) return 15 * LABEL_FONT_SCALE;
   const letter = glyph.normalize("NFD").replace(/\p{Mark}/gu, "");
-  if (/^[ilIjt.,:;'!|`\[\]()]$/u.test(letter)) return 4.5;
-  if (/^[MW@%&#]$/u.test(letter)) return 12;
-  if (/^[A-Z]$/u.test(letter)) return 9.5;
+  if (/^[ilIjt.,:;'!|`\[\]()]$/u.test(letter)) return 4.5 * LABEL_FONT_SCALE;
+  if (/^[MW@%&#]$/u.test(letter)) return 12 * LABEL_FONT_SCALE;
+  if (/^[A-Z]$/u.test(letter)) return 9.5 * LABEL_FONT_SCALE;
   // Unknown scripts receive a full em rather than an optimistic Latin width.
-  return /^[a-z0-9_\-/\\?+=<>]$/u.test(letter) ? 8 : 13;
+  return (/^[a-z0-9_\-/\\?+=<>]$/u.test(letter) ? 8 : 13) * LABEL_FONT_SCALE;
 }

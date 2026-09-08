@@ -16,7 +16,7 @@ requests. Your Markdown stays in your vault.
   frontmatter becomes a node.
 - Concepts appear as circles with stable colours based on their type, in both
   light and dark themes. A borderless background that fades outward below
-  each circle shows **Type: Title** and wraps long titles onto as many lines
+  each circle shows Type: Title in a regular 16px font and wraps long titles onto as many lines
   as needed. Node height and overlap protection account for the circle and
   its full title.
 - Every Markdown Concept Link becomes a directed relationship occurrence.
@@ -25,9 +25,13 @@ requests. Your Markdown stays in your vault.
   entire vault as a global hairball.
 - A PGM 0.4 YAML flow-map link title supplies complete relationship properties;
   a non-empty string `type` is also shown as its relationship type.
-- Relationship types sit directly in a gap at the middle of their arrow,
+- All relationships between a pair of concepts share one visual connection.
+  Its caption combines their distinct types; arrowheads at either end indicate
+  the directions actually present. The original relationship occurrences and
+  their properties remain separate, including repeated types.
+- Relationship types use a 14px font directly in a gap at the middle of their arrow,
   with a straight baseline aligned to its tangent and a readable orientation.
-  Parallel relationships use separate curves. Text, arrows, and nodes zoom
+  Self relationships share a single loop. Text, arrows, and nodes zoom
   together; captions never detach from their relationships. A type that is too
   long for its arrow is shortened with an ellipsis; its complete value remains
   available in the tooltip and property strip. The documented compatibility
@@ -37,9 +41,10 @@ requests. Your Markdown stays in your vault.
   relationships and concepts outside its two endpoints.
 - Unresolved concept targets remain relationships and are drawn with a dashed
   line and hollow endpoint; the viewer does not invent a node for them.
-- Selecting a concept or relationship shows its properties in a compact,
-  read-only strip below the graph. Property names and values use larger,
-  high-contrast text that wraps and can be selected for copying.
+- Selecting a concept shows its properties below the graph. Selecting a
+  connection lists every relationship it represents, each with its own type,
+  source-to-target direction, and complete properties. The read-only panel
+  scrolls when needed; property names and values wrap and can be copied.
 - Search matches names, IDs, types, link text, and property values inside the
   current local projection; it does not reveal unrelated vault content.
 - Canonical PGM relationship links gain a small direction badge and their

@@ -394,7 +394,7 @@ body.pgm-has-maximized-viewer {
 
 .pgm-node-label {
   fill: var(--text-normal);
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 400;
   pointer-events: none;
   user-select: none;
@@ -437,7 +437,7 @@ body.pgm-has-maximized-viewer {
   stroke-linejoin: round;
   paint-order: stroke;
   font-family: var(--font-interface);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   dominant-baseline: central;
   pointer-events: none;
@@ -500,6 +500,43 @@ body.pgm-has-maximized-viewer {
 
 .pgm-details-heading {
   min-width: 0;
+}
+
+.pgm-selection-details.is-relationship-group {
+  max-height: min(280px, 40dvh);
+}
+
+.is-relationship-group > .pgm-details-heading,
+.pgm-relationship-list {
+  grid-column: 1 / -1;
+}
+
+.pgm-relationship-list {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.pgm-relationship {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.75fr) minmax(0, 1.5fr);
+  gap: 12px;
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.pgm-relationship-heading {
+  min-width: 0;
+}
+
+.pgm-relationship h4 {
+  margin: 0;
+  color: var(--text-normal);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .pgm-selection-details h3 {
@@ -734,6 +771,11 @@ body {
     max-height: min(210px, 42dvh);
   }
 
+  .pgm-relationship {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
   .pgm-zoom-controls {
     right: 8px;
     bottom: 8px;
@@ -786,6 +828,11 @@ body {
     grid-template-columns: minmax(0, 1fr);
     max-height: 210px;
     max-height: min(210px, 42dvh);
+  }
+
+  .pgm-relationship {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
   }
 
   .pgm-zoom-controls {
