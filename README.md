@@ -62,6 +62,8 @@ requests. Your Markdown stays in your vault.
 - **Click a concept** to highlight its incoming and outgoing relationships,
   including their types and arrowheads. Other relationships fade. The initial
   overview stays neutral until you select a concept.
+- **Click the empty background** to clear the selection, its highlights, and
+  the property panel. Panning or dragging keeps the current selection.
 - **Scroll or pinch on a trackpad** over the graph to zoom around the pointer.
   Drag the empty background to pan. The corner controls also zoom in and out,
   show the current zoom level, and fit the graph to the pane.
