@@ -49,8 +49,10 @@ requests. Your Markdown stays in your vault.
   including occurrences beyond the current projection. Its relationship count
   jumps to that list. Selecting an entry shows the connection's full properties
   and reveals its neighbours if needed, preserving the current zoom and pan.
-- Search matches names, IDs, types, link text, and property values inside the
-  current local projection; it does not reveal unrelated vault content.
+- Search keeps only nodes whose displayed `Type: Title` contains every entered
+  keyword, ignoring case, and relationships between those matching nodes.
+  It filters the current local projection while preserving node positions,
+  zoom, and pan; clearing the search restores the full projection.
 - Canonical PGM relationship links gain a small direction badge and their
   relationship type in Reading View and Live Preview. Hovering over the badge or type
   shows all relationship properties, including nested values, in its tooltip.
@@ -65,6 +67,9 @@ requests. Your Markdown stays in your vault.
   titles. Valid `date`, `year`, or `from` properties order each group's concepts
   chronologically, with title/ID as a fallback; spacing does not represent time.
   These are individual movable nodes, with no group boxes or collapsed data.
+  Relationships at the focus receive angular clearance across all arcs.
+  Captions can slide along their straight baseline to reduce collisions with
+  other text, nodes, and lines; manual node positions remain under your control.
 - **Back / Forward** revisit concept and relationship selections, graph focus
   changes, and expanded or contracted branches. Each step restores its
   expanded branches, manual node positions, selection, search, zoom, and pan.

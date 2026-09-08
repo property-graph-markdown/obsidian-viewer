@@ -1,5 +1,6 @@
 import type { PgmEdge, PgmNode } from "./pgm";
 import { NODE_MIN_HEIGHT, NODE_WIDTH, nodeLabel, nodePresentation } from "./node-presentation";
+import { spreadFocusEdges } from "./angular-layout";
 
 /** Default dimensions; individual nodes carry their measured label dimensions. */
 export const LOCAL_GRAPH_NODE_WIDTH = NODE_WIDTH;
@@ -111,10 +112,11 @@ export function layoutLocalGraph(
   arrangeTypeSectors(simulationNodes);
   const layoutEdges = indexLayoutEdges(simulationNodes, edges);
   settle(simulationNodes, layoutEdges);
-  const positionedNodes = resolveNodeOverlaps(
+  const collisionFree = resolveNodeOverlaps(
     simulationNodes.map(({ node, width, height, x, y }) => ({ ...node, width, height, x, y })),
     visibleFocusId ?? undefined,
   );
+  const positionedNodes = spreadFocusEdges(collisionFree, edges, visibleFocusId ?? null, LOCAL_GRAPH_NODE_GAP);
 
   let horizontalExtent = 0;
   let verticalExtent = 0;

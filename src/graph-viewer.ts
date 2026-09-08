@@ -14,9 +14,11 @@ import {
 } from "./local-graph-layout";
 import { nodeLabel, nodeTitle, nodePresentation, graphemes, NODE_LABEL_LINE_HEIGHT, NODE_RADIUS, NODE_LABEL_TOP } from "./node-presentation";
 import { edgeGeometry, unresolvedTarget } from "./edge-geometry";
+import { placeEdgeCaptions, type CaptionEdgeSegment, type EdgeCaptionLayout } from "./edge-caption-layout";
 import { groupEdges, type PgmEdgeGroup } from "./edge-groups";
 import { NavigationHistory } from "./navigation-history";
 import { renderNodeRelationships } from "./node-relationships";
+import { graphMatches } from "./node-search";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 let markerCounter = 0;
@@ -37,6 +39,7 @@ interface GraphViewSnapshot {
 }
 
 interface GraphSurface {
+  captionsNeedLayout: boolean;
   svg: SVGSVGElement;
   viewport: SVGGElement;
   edgeLayer: SVGGElement;
@@ -59,6 +62,7 @@ interface EdgeCaption {
   width: number;
   height: number;
   measuredWidth: number;
+  movable: boolean;
 }
 
 /** Services supplied by a browser page or an Obsidian pane. */
@@ -308,10 +312,13 @@ export class PgmGraphViewer {
     search.ariaLabel = "Find in local graph";
     search.value = this.query;
     search.addEventListener("input", () => {
+      const camera = { ...this.camera };
+      this.fitGraphToPane = false;
       this.query = search.value;
       this.renderGraphArea(graphArea);
-      search.focus();
-      search.setSelectionRange(this.query.length, this.query.length);
+      this.camera = camera;
+      this.applyCamera();
+      title.querySelector(".pgm-summary")?.replaceWith(this.renderSummary(projection));
     });
     searchWrap.append(searchIcon, search);
     controls.append(
@@ -331,8 +338,9 @@ export class PgmGraphViewer {
 
   private renderSummary(projection: LocalGraphProjection): HTMLElement {
     if (!this.graph) return textElement("p", "", "pgm-summary");
-    const visibleNodes = projection.nodes.length;
-    const visibleEdges = projection.edges.length;
+    const matches = graphMatches(projection.nodes, projection.edges, this.query);
+    const visibleNodes = matches.nodeIds.size;
+    const visibleEdges = matches.edgeIds.size;
     const nodes = this.graph.nodes.length;
     const edges = this.graph.edges.length;
     const skipped = this.graph.diagnostics.length;
@@ -392,24 +400,29 @@ export class PgmGraphViewer {
   }
 
   private renderSvg(nodes: PgmNode[], edges: PgmEdge[]): SVGSVGElement {
-    const positioned = this.positionNodes(nodes, edges);
+    // Lay out the full projection before filtering, retaining every cached
+    // position when typing or clearing a query.
+    const matches = graphMatches(nodes, edges, this.query);
+    const positioned = this.positionNodes(nodes, edges).filter((node) => matches.nodeIds.has(node.id));
     const byId = new Map(positioned.map((node) => [node.id, node]));
-    const connections = groupEdges(edges);
+    const visibleEdges = edges.filter((edge) => matches.edgeIds.has(edge.id));
+    const connections = groupEdges(visibleEdges);
     const selectedConnection = this.selection?.kind === "edge"
       ? connections.find((connection) => connection.id === this.selection?.id)
       : undefined;
 
     const svg = svgElement("svg");
     svg.classList.add("pgm-graph");
-    if (this.selection?.kind === "edge") svg.classList.add("has-selected-edge");
-    if (this.selection?.kind === "node" && this.highlightedNodeId === this.selection.id) {
+    if (selectedConnection) svg.classList.add("has-selected-edge");
+    if (this.selection?.kind === "node" && byId.has(this.selection.id)
+      && this.highlightedNodeId === this.selection.id) {
       svg.classList.add("has-selected-node");
     }
     svg.setAttribute("tabindex", "0");
     svg.setAttribute("role", "group");
     svg.setAttribute(
       "aria-label",
-      `Local property graph with ${nodes.length} concepts and ${connections.length} connections representing ${edges.length} relationships`,
+      `Local property graph with ${positioned.length} concepts and ${connections.length} connections representing ${visibleEdges.length} relationships`,
     );
 
     const defs = svgElement("defs");
@@ -446,7 +459,6 @@ export class PgmGraphViewer {
     }
     svg.append(defs);
 
-    const matches = graphMatches(nodes, edges, this.query);
     const edgeLayer = svgElement("g");
     edgeLayer.classList.add("pgm-edges");
     const captions = new Map<string, EdgeCaption>();
@@ -460,7 +472,7 @@ export class PgmGraphViewer {
           source,
           target,
           index,
-          edge.relationships.some((relationship) => matches.edgeIds.has(relationship.id)),
+          true,
           defs,
           captions,
         ),
@@ -473,11 +485,22 @@ export class PgmGraphViewer {
     const nodeLayer = svgElement("g");
     nodeLayer.classList.add("pgm-nodes");
     for (const node of positioned) {
-      nodeLayer.append(this.renderNode(node, matches.nodeIds.has(node.id), selectedConnection));
+      nodeLayer.append(this.renderNode(node, true, selectedConnection));
     }
     viewport.append(nodeLayer);
     svg.append(viewport);
-    this.surface = { svg, viewport, edgeLayer, nodeLayer, nodes: byId, edges: connections, captions };
+    if (positioned.length === 0 && this.query.trim()) {
+      const empty = svgElement("text");
+      empty.setAttribute("x", "50%");
+      empty.setAttribute("y", "50%");
+      empty.setAttribute("text-anchor", "middle");
+      empty.setAttribute("fill", "var(--text-muted)");
+      empty.setAttribute("font-size", "14");
+      empty.setAttribute("pointer-events", "none");
+      empty.textContent = "No matching concepts";
+      svg.append(empty);
+    }
+    this.surface = { svg, viewport, edgeLayer, nodeLayer, nodes: byId, edges: connections, captions, captionsNeedLayout: true };
     this.bindGraphGestures(this.surface);
     return svg;
   }
@@ -655,6 +678,7 @@ export class PgmGraphViewer {
       group: caption, text: label, hit: labelHit, path: visible,
       mask, maskBounds, gap, anchor: geometry.label,
       title, width: 0, height: 0, measuredWidth: -1,
+      movable: source.id !== targetPoint.id,
     });
     const tooltip = svgElement("title");
     tooltip.textContent = edge.relationships.map((relationship) => {
@@ -924,12 +948,27 @@ export class PgmGraphViewer {
 
   private positionEdgeCaptions(): void {
     const surface = this.surface;
-    if (!surface || !surface.svg.isConnected) return;
-    for (const caption of surface.captions.values()) {
+    if (!surface || !surface.svg.isConnected || !surface.captionsNeedLayout) return;
+    const candidates: EdgeCaptionLayout[] = [];
+    const segments: CaptionEdgeSegment[] = [];
+    for (const [id, caption] of surface.captions) {
       const length = caption.path.getTotalLength();
       const maxWidth = Math.max(0, Math.min(320, length - 40));
       if (caption.measuredWidth !== maxWidth) measureEdgeCaption(caption, maxWidth);
-      const { x, y, angle } = caption.anchor;
+      candidates.push({
+        id, ...caption.anchor, width: caption.width, height: caption.height,
+        maxShift: caption.movable
+          ? Math.max(0, Math.min(180, length * 0.28, (length - caption.width) / 2 - 16)) : 0,
+      });
+      if (caption.movable) {
+        const start = caption.path.getPointAtLength(0);
+        const end = caption.path.getPointAtLength(length);
+        segments.push({ id, x1: start.x, y1: start.y, x2: end.x, y2: end.y });
+      }
+    }
+    const anchors = placeEdgeCaptions(candidates, [...surface.nodes.values()], segments);
+    for (const [id, caption] of surface.captions) {
+      const { x, y, angle } = anchors.get(id) ?? caption.anchor;
       const transform = `translate(${x} ${y}) rotate(${angle})`;
       caption.group.setAttribute("transform", transform);
       caption.gap.setAttribute("transform", transform);
@@ -942,6 +981,7 @@ export class PgmGraphViewer {
         element.setAttribute("height", String(bounds.height + 32));
       }
     }
+    surface.captionsNeedLayout = false;
   }
 
   private zoomGraph(factor: number, anchor = {
@@ -961,6 +1001,7 @@ export class PgmGraphViewer {
   }
 
   private redrawPositions(surface: GraphSurface): void {
+    surface.captionsNeedLayout = true;
     for (const group of Array.from(surface.nodeLayer.querySelectorAll<SVGGElement>(".pgm-node"))) {
       const node = surface.nodes.get(group.dataset.nodeId ?? "");
       if (!node) continue;
@@ -1230,46 +1271,6 @@ export class PgmGraphViewer {
     container.append(button);
     return button;
   }
-}
-
-function graphMatches(
-  nodes: readonly PgmNode[],
-  edges: readonly PgmEdge[],
-  rawQuery: string,
-): { nodeIds: ReadonlySet<string>; edgeIds: ReadonlySet<string> } {
-  const query = rawQuery.trim().toLowerCase();
-  if (!query) {
-    return {
-      nodeIds: new Set(nodes.map((node) => node.id)),
-      edgeIds: new Set(edges.map((edge) => edge.id)),
-    };
-  }
-
-  const nodeIds = new Set(
-    nodes.filter((node) => searchableNode(node).includes(query)).map((node) => node.id),
-  );
-  const directlyMatchedNodeIds = new Set(nodeIds);
-  const edgeIds = new Set<string>();
-  for (const edge of edges) {
-    if (
-      searchableEdge(edge).includes(query) ||
-      directlyMatchedNodeIds.has(edge.source) ||
-      directlyMatchedNodeIds.has(edge.target)
-    ) {
-      edgeIds.add(edge.id);
-      nodeIds.add(edge.source);
-      if (edge.resolved) nodeIds.add(edge.target);
-    }
-  }
-  return { nodeIds, edgeIds };
-}
-
-function searchableNode(node: PgmNode): string {
-  return `${node.id}\n${node.path}\n${node.type}\n${nodeLabel(node)}\n${formatValue(node.properties)}`.toLowerCase();
-}
-
-function searchableEdge(edge: PgmEdge): string {
-  return `${edge.source}\n${edge.target}\n${edge.type ?? ""}\n${edge.text}\n${formatValue(edge.properties)}`.toLowerCase();
 }
 
 function measureEdgeCaption(caption: EdgeCaption, maxWidth: number): void {
