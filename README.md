@@ -15,6 +15,10 @@ requests. Your Markdown stays in your vault.
 - Every Markdown Concept Link becomes a directed relationship occurrence.
 - A PGM 0.4 YAML flow-map link title supplies complete relationship properties;
   a non-empty string `type` is also shown as its relationship type.
+- Every relationship type is written directly along its arrow. Labels stay
+  deliberately quiet in dense graphs, then become clear on hover, keyboard
+  focus, selection, or when connected to the selected concept. The documented
+  compatibility edge without a type is honestly labelled `untyped`.
 - Unresolved concept targets remain relationships and are drawn with a dashed
   line and hollow endpoint; the viewer does not invent a node for them.
 - Search filters names, IDs, types, link text, and property values.

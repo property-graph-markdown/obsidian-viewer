@@ -175,11 +175,39 @@
 .pgm-edge-label {
   fill: var(--text-muted);
   stroke: var(--background-primary);
-  stroke-width: 5px;
+  stroke-width: 4px;
   paint-order: stroke;
-  text-anchor: middle;
-  font-size: 10px;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.012em;
+  dominant-baseline: central;
+  opacity: 0.58;
   pointer-events: none;
+  user-select: none;
+}
+
+.pgm-edge-label-guide {
+  fill: none;
+  stroke: none;
+  pointer-events: none;
+}
+
+.pgm-edge:hover .pgm-edge-label,
+.pgm-edge:focus-visible .pgm-edge-label,
+.pgm-edge.is-selected .pgm-edge-label {
+  fill: var(--pgm-accent);
+  stroke-width: 5px;
+  font-weight: 700;
+  opacity: 1;
+}
+
+.pgm-edge.is-related .pgm-edge-label {
+  fill: var(--text-normal);
+  opacity: 0.9;
+}
+
+.pgm-edge.is-unresolved .pgm-edge-label {
+  font-style: italic;
 }
 
 .pgm-edge.is-unresolved .pgm-edge-line {

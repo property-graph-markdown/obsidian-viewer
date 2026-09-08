@@ -365,6 +365,12 @@ class PgmView extends ItemView {
     if (this.selection?.kind === "edge" && this.selection.id === edge.id) {
       group.classList.add("is-selected");
     }
+    if (
+      this.selection?.kind === "node" &&
+      (this.selection.id === edge.source || this.selection.id === edge.target)
+    ) {
+      group.classList.add("is-related");
+    }
     group.setAttribute("role", "button");
     group.setAttribute("tabindex", "0");
     group.setAttribute("aria-label", `${edge.type ?? "untyped relationship"}: ${edge.source} to ${edge.target}`);
@@ -385,14 +391,28 @@ class PgmView extends ItemView {
     hit.classList.add("pgm-edge-hit");
     hit.setAttribute("d", geometry.path);
 
+    // Keep edge labels on a distinct, invisible guide. The guide follows the
+    // relationship curve, but reverses leftward edges so text is never upside
+    // down. The visible path always remains source → target.
+    const labelGuide = svgElement("path");
+    const labelGuideId = `${this.markerId}-label-${edgeIndex}`;
+    labelGuide.id = labelGuideId;
+    labelGuide.classList.add("pgm-edge-label-guide");
+    labelGuide.setAttribute("d", geometry.labelPath);
+    labelGuide.setAttribute("aria-hidden", "true");
+
     const label = svgElement("text");
     label.classList.add("pgm-edge-label");
-    label.setAttribute("x", String(geometry.labelX));
-    label.setAttribute("y", String(geometry.labelY));
-    label.textContent = truncate(edge.type ?? "", 24);
+    label.setAttribute("aria-hidden", "true");
+    const labelText = svgElement("textPath");
+    labelText.setAttribute("href", `#${labelGuideId}`);
+    labelText.setAttribute("startOffset", "50%");
+    labelText.setAttribute("text-anchor", "middle");
+    labelText.textContent = truncate(edge.type?.trim() || "untyped", 24);
+    label.append(labelText);
     const tooltip = svgElement("title");
     tooltip.textContent = `${edge.type ?? "Untyped"}: ${edge.source} → ${edge.target}${target ? "" : " (unresolved)"}`;
-    group.append(hit, visible, label, tooltip);
+    group.append(hit, visible, labelGuide, label, tooltip);
 
     if (!target) {
       const dot = svgElement("circle");
@@ -565,16 +585,13 @@ function edgeGeometry(
   self: boolean,
   targetIsNode: boolean,
   bend: number,
-): { path: string; labelX: number; labelY: number } {
+): { path: string; labelPath: string } {
   if (self) {
     const x = source.x + NODE_WIDTH / 2 + 2;
     const y = source.y - 12;
     const radius = 68 + Math.abs(bend);
-    return {
-      path: `M ${x} ${y} C ${x + radius} ${y - radius}, ${x + radius} ${y + radius}, ${x} ${y + 24}`,
-      labelX: x + radius - 12,
-      labelY: y - radius / 2,
-    };
+    const path = `M ${x} ${y} C ${x + radius} ${y - radius}, ${x + radius} ${y + radius}, ${x} ${y + 24}`;
+    return { path, labelPath: path };
   }
 
   const dx = target.x - source.x;
@@ -594,13 +611,14 @@ function edgeGeometry(
   const normalY = (x2 - x1) / length;
   const controlX = (x1 + x2) / 2 + normalX * bend;
   const controlY = (y1 + y2) / 2 + normalY * bend;
-  return {
-    path: bend === 0
-      ? `M ${x1} ${y1} L ${x2} ${y2}`
-      : `M ${x1} ${y1} Q ${controlX} ${controlY} ${x2} ${y2}`,
-    labelX: (x1 + 2 * controlX + x2) / 4,
-    labelY: (y1 + 2 * controlY + y2) / 4 - 8,
-  };
+  const path = bend === 0
+    ? `M ${x1} ${y1} L ${x2} ${y2}`
+    : `M ${x1} ${y1} Q ${controlX} ${controlY} ${x2} ${y2}`;
+  const reversePath = bend === 0
+    ? `M ${x2} ${y2} L ${x1} ${y1}`
+    : `M ${x2} ${y2} Q ${controlX} ${controlY} ${x1} ${y1}`;
+  const readsForward = x2 > x1 || (Math.abs(x2 - x1) < 0.001 && y2 >= y1);
+  return { path, labelPath: readsForward ? path : reversePath };
 }
 
 function renderProperties(properties: Record<string, unknown>): HTMLElement {
