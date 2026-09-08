@@ -19,8 +19,10 @@ import { groupEdges, type PgmEdgeGroup } from "./edge-groups";
 import { NavigationHistory } from "./navigation-history";
 import { renderNodeRelationships } from "./node-relationships";
 import { graphMatches } from "./node-search";
+import { attachPropertyPanelResize } from "./property-panel-resize";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+const PROPERTY_PANEL_HEIGHT_KEY = "pgm-viewer.propertyPanelHeight";
 let markerCounter = 0;
 
 type Selection =
@@ -73,6 +75,8 @@ export interface GraphViewerHost {
   openNode(node: PgmNode): Promise<void>;
   setIcon(element: HTMLElement, name: string): void;
   reportError(error: unknown): void;
+  loadPropertyPanelHeight?(): number | null;
+  savePropertyPanelHeight?(height: number): void | Promise<void>;
 }
 
 export class PgmGraphViewer {
@@ -87,11 +91,14 @@ export class PgmGraphViewer {
   private nodeClickTimer: number | undefined;
   private isMaximized = false;
   private maximizePlaceholder: Comment | null = null;
-  private fitGraphToPane = true;
+  private fitGraphToPane = false;
+  private centerFocusOnNextResize = true;
   private positions = new Map<string, PositionedPgmNode>();
   private surface: GraphSurface | null = null;
   private resizeObserver: ResizeObserver | null = null;
-  private camera = { x: 0, y: 0, scale: 1 };
+  private propertyPanelHeight: number | null = null;
+  private clearPropertyPanelResize: (() => void) | null = null;
+  private camera = { x: 0, y: 0, scale: 0.4 };
   private viewportSize = { width: 0, height: 0 };
   private fitScale = 1;
   private openNodeGeneration = 0;
@@ -108,7 +115,19 @@ export class PgmGraphViewer {
   constructor(
     private readonly contentEl: HTMLElement,
     private readonly host: GraphViewerHost,
-  ) {}
+  ) {
+    try {
+      const saved = this.host.loadPropertyPanelHeight
+        ? this.host.loadPropertyPanelHeight()
+        : this.contentEl.ownerDocument.defaultView?.localStorage.getItem(PROPERTY_PANEL_HEIGHT_KEY);
+      const height = typeof saved === "string" && saved.trim() ? Number(saved) : saved;
+      if (typeof height === "number" && Number.isFinite(height) && height >= 0) {
+        this.propertyPanelHeight = height;
+      }
+    } catch {
+      // Storage can be unavailable in embedded/private browser contexts.
+    }
+  }
 
   async start(): Promise<void> {
     if (this.started) return;
@@ -175,7 +194,8 @@ export class PgmGraphViewer {
     let focusNodeId = this.localState.focusNodeId;
     if (focusNodeId === null || !nodeIds.has(focusNodeId)) {
       this.positions.clear();
-      this.fitGraphToPane = true;
+      this.fitGraphToPane = false;
+      this.centerFocusOnNextResize = true;
       const activePath = this.host.activePath();
       focusNodeId =
         this.graph.nodes.find((node) => node.path === activePath)?.id ??
@@ -392,8 +412,16 @@ export class PgmGraphViewer {
     this.iconButton(zoomControls, "zoom-in", "Zoom in", () => this.zoomGraph(1.25));
     this.iconButton(zoomControls, "scan", "Fit graph", () => this.fitGraph());
     canvas.append(zoomControls);
-    body.append(canvas, this.renderDetails());
+    const details = this.renderDetails();
+    details.id = `${this.markerId}-properties`;
+    const resizer = element("div", "pgm-panel-resizer");
+    body.append(canvas, resizer, details);
     graphArea.append(body);
+    this.clearPropertyPanelResize = attachPropertyPanelResize({
+      body, handle: resizer, panel: details, height: this.propertyPanelHeight,
+      onResizeStart: () => { this.fitGraphToPane = false; },
+      onChange: (height) => this.savePropertyPanelHeight(height),
+    });
     this.resizeViewport(canvas);
     this.resizeObserver = new ResizeObserver(() => this.resizeViewport(canvas));
     this.resizeObserver.observe(canvas);
@@ -555,7 +583,7 @@ export class PgmGraphViewer {
     label.classList.add("pgm-node-label");
     label.setAttribute("x", String(node.width / 2));
     label.setAttribute("text-anchor", "middle");
-    const firstBaseline = NODE_LABEL_TOP + 28;
+    const firstBaseline = NODE_LABEL_TOP + 33;
     presentation.lines.forEach((line, index) => {
       const span = svgElement("tspan");
       span.setAttribute("x", String(node.width / 2));
@@ -747,7 +775,8 @@ export class PgmGraphViewer {
     this.localState = refocusLocalGraph(this.localState, nodeId);
     this.positions.clear();
     this.selection = { kind: "node", id: nodeId };
-    this.fitGraphToPane = true;
+    this.fitGraphToPane = false;
+    this.centerFocusOnNextResize = true;
     this.history.push(this.captureView());
     this.render();
   }
@@ -791,6 +820,7 @@ export class PgmGraphViewer {
     this.camera = { ...entry.camera };
     this.fitScale = entry.fitScale;
     this.fitGraphToPane = false;
+    this.centerFocusOnNextResize = false;
   }
 
   private toggleNodeExpansion(nodeId: string): void {
@@ -845,14 +875,31 @@ export class PgmGraphViewer {
   }
 
   private fitGraph(): void {
+    this.centerFocusOnNextResize = false;
     this.fitGraphToPane = true;
     this.fitViewport();
   }
 
   private clearSurface(): void {
+    this.clearPropertyPanelResize?.();
+    this.clearPropertyPanelResize = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.surface = null;
+  }
+
+  private savePropertyPanelHeight(height: number): void {
+    this.propertyPanelHeight = height;
+    if (this.host.savePropertyPanelHeight) {
+      Promise.resolve().then(() => this.host.savePropertyPanelHeight!(height))
+        .catch((error) => this.host.reportError(error));
+    } else {
+      try {
+        this.contentEl.ownerDocument.defaultView?.localStorage.setItem(PROPERTY_PANEL_HEIGHT_KEY, String(height));
+      } catch {
+        // The in-memory preference still survives navigation if storage is blocked.
+      }
+    }
   }
 
   private positionNodes(nodes: PgmNode[], edges: PgmEdge[]): PositionedPgmNode[] {
@@ -904,7 +951,17 @@ export class PgmGraphViewer {
     const previous = this.viewportSize;
     this.viewportSize = { width, height };
     this.surface.svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-    if (this.fitGraphToPane) {
+    if (this.centerFocusOnNextResize) {
+      this.centerFocusOnNextResize = false;
+      const focus = this.surface.nodes.get(this.localState.focusNodeId ?? "");
+      const bounds = this.surface.viewport.getBBox();
+      const centerX = focus?.x ?? bounds.x + bounds.width / 2;
+      const centerY = focus ? focus.y - focus.height / 2 + NODE_RADIUS : bounds.y + bounds.height / 2;
+      // Start at 40% and retain the chosen zoom when refocusing.
+      this.camera.x = width / 2 - centerX * this.camera.scale;
+      this.camera.y = height / 2 - centerY * this.camera.scale;
+      this.applyCamera();
+    } else if (this.fitGraphToPane) {
       this.fitViewport();
     } else {
       // Resizing a pane keeps the same graph point at its centre.
@@ -1165,7 +1222,6 @@ export class PgmGraphViewer {
     this.contentEl.classList.add("pgm-is-maximized");
     ownerDocument.body.append(this.contentEl);
     this.isMaximized = true;
-    this.fitGraphToPane = true;
     this.render();
   }
 
@@ -1291,7 +1347,7 @@ function measureEdgeCaption(caption: EdgeCaption, maxWidth: number): void {
     text.textContent = low > 0 ? characters.slice(0, low).join("") + "…" : "";
   }
   caption.width = text.textContent ? text.getComputedTextLength() + 12 : 0;
-  caption.height = text.textContent ? 24 : 0;
+  caption.height = text.textContent ? 29 : 0;
   caption.measuredWidth = maxWidth;
   for (const rectangle of [hit, gap]) {
     rectangle.setAttribute("x", String(-caption.width / 2));

@@ -1,9 +1,32 @@
 import { describe, expect, it } from "vitest";
 
 import { extractPgmRelationshipLinkSources } from "../src/relationship-markdown";
-import { formatRelationshipTooltip } from "../src/relationship-tooltip";
+import { formatRelationshipTooltip, relationshipPropertyRows } from "../src/relationship-tooltip";
 
 describe("Relationship badge tooltip", () => {
+  it("places type first and keeps every authored property without losing YAML value distinctions", () => {
+    expect(relationshipPropertyRows({
+      numeric: "42", type: "cites", missing: null, enabled: false, empty: "", count: 0,
+    })).toEqual([
+      { key: "type", value: "cites" },
+      { key: "numeric", value: '\"42\"' },
+      { key: "missing", value: "null" },
+      { key: "enabled", value: "false" },
+      { key: "empty", value: '\"\"' },
+      { key: "count", value: "0" },
+    ]);
+  });
+
+  it("keeps nested maps, arrays, multiline text and long values complete in popover rows", () => {
+    const rows = relationshipPropertyRows({
+      type: "cites", evidence: [{ page: 42, quote: "First line\nSecond line" }],
+      note: "<script>" + "Long content ".repeat(200),
+    });
+    expect(rows[1]?.value).toContain("- page: 42");
+    expect(rows[1]?.value).toContain("First line\n    Second line");
+    expect(rows[2]?.value).toContain("<script>" + "Long content ".repeat(200).trimEnd());
+  });
+
   it("shows every authored property, including the type, as readable key/value text", () => {
     const [relationship] = extractPgmRelationshipLinkSources(
       `[Peer](Peer.md "{type: collaborated_with, since: 1833, confidence: 0.75, confirmed: false, missing: null}")`,

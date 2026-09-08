@@ -2,6 +2,7 @@ import { type EditorView, WidgetType } from "@codemirror/view";
 
 import type { PgmProperties } from "./pgm";
 import { formatRelationshipTooltip } from "./relationship-tooltip";
+import { bindRelationshipPropertyHover, type RelationshipHoverDetails } from "./relationship-hover";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -9,22 +10,20 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 export function appendRelationshipBadge(
   container: HTMLElement,
   relationshipType: string,
-  tooltip: string,
+  details: RelationshipHoverDetails,
 ): void {
   const rootDocument = container.ownerDocument;
   container.appendChild(rootDocument.createTextNode(" "));
 
   const badge = rootDocument.createElement("span");
   badge.className = "pgm-relationship-badge";
-  badge.setAttribute("title", tooltip);
-  badge.setAttribute("role", "img");
-  badge.setAttribute("aria-label", tooltip);
   appendArrowIcon(badge);
 
   const type = rootDocument.createElement("span");
   type.className = "pgm-relationship-type";
-  type.setAttribute("title", tooltip);
   type.textContent = `:${relationshipType}`;
+  bindRelationshipPropertyHover(badge, details);
+  bindRelationshipPropertyHover(type, details);
   container.append(badge, type);
 }
 
@@ -50,7 +49,8 @@ export class PgmRelationshipBadgeWidget extends WidgetType {
     private readonly destination: string,
     private readonly readerLabel: string,
     private readonly relationshipType: string,
-    relationshipProperties: PgmProperties = { type: relationshipType },
+    private readonly relationshipProperties: PgmProperties = { type: relationshipType },
+    private readonly sourcePath?: string,
   ) {
     super();
     this.tooltip = formatRelationshipTooltip(relationshipProperties);
@@ -61,25 +61,29 @@ export class PgmRelationshipBadgeWidget extends WidgetType {
       this.destination === other.destination &&
       this.readerLabel === other.readerLabel &&
       this.relationshipType === other.relationshipType &&
-      this.tooltip === other.tooltip
+      this.tooltip === other.tooltip &&
+      this.sourcePath === other.sourcePath
     );
   }
 
   override toDOM(view: EditorView): HTMLElement {
     const rootDocument = view.dom.ownerDocument;
+    const wrapper = rootDocument.createElement("span");
+    wrapper.className = "pgm-relationship-link pgm-editor-relationship-link";
     const link = rootDocument.createElement("a");
-    link.className =
-      "internal-link pgm-relationship-link pgm-editor-relationship-link";
+    link.className = "internal-link pgm-relationship-label";
     link.dataset.href = this.destination;
     link.dataset.pgmRelationshipBadge = "true";
     link.setAttribute("href", this.destination);
     link.setAttribute("draggable", "false");
 
-    const label = rootDocument.createElement("span");
-    label.className = "pgm-relationship-label";
-    label.textContent = this.readerLabel;
-    link.appendChild(label);
-    appendRelationshipBadge(link, this.relationshipType, this.tooltip);
-    return link;
+    link.textContent = this.readerLabel;
+    wrapper.appendChild(link);
+    appendRelationshipBadge(wrapper, this.relationshipType, {
+      properties: this.relationshipProperties,
+      source: this.sourcePath,
+      target: this.readerLabel,
+    });
+    return wrapper;
   }
 }

@@ -1,8 +1,9 @@
-import { ItemView, Notice, Plugin, setIcon, TFile } from "obsidian";
+import { ItemView, Notice, Plugin, setIcon, TFile, type WorkspaceLeaf } from "obsidian";
 
 import { parsePgmVault } from "./pgm";
 import { PgmGraphViewer } from "./graph-viewer";
 import { openNodeBesideViewer } from "./open-node";
+import { disposeRelationshipPropertyHovers } from "./relationship-hover";
 import {
   pgmRelationshipBadgeExtension,
   renderPgmRelationshipBadges,
@@ -11,9 +12,17 @@ import {
 const VIEW_TYPE_PGM = "pgm-viewer";
 
 export default class PgmViewerPlugin extends Plugin {
+  private preferences: Record<string, unknown> = {};
+  private pendingPreferenceSave: Promise<void> = Promise.resolve();
+
   override async onload(): Promise<void> {
-    this.registerView(VIEW_TYPE_PGM, (leaf) => new PgmView(leaf));
+    const saved: unknown = await this.loadData().catch(() => null);
+    if (saved && typeof saved === "object" && !Array.isArray(saved)) {
+      this.preferences = saved as Record<string, unknown>;
+    }
+    this.registerView(VIEW_TYPE_PGM, (leaf) => new PgmView(leaf, this));
     this.registerMarkdownPostProcessor(renderPgmRelationshipBadges);
+    this.register(disposeRelationshipPropertyHovers);
     this.registerEditorExtension(pgmRelationshipBadgeExtension);
 
     this.addRibbonIcon("git-fork", "Open PGM Viewer", () => {
@@ -43,6 +52,20 @@ export default class PgmViewerPlugin extends Plugin {
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_PGM);
   }
 
+  loadPropertyPanelHeight(): number | null {
+    const height = this.preferences.propertyPanelHeight;
+    return typeof height === "number" && Number.isFinite(height) && height >= 0 ? height : null;
+  }
+
+  savePropertyPanelHeight(height: number): Promise<void> {
+    this.preferences.propertyPanelHeight = height;
+    const snapshot = { ...this.preferences };
+    // Serialize rapid keyboard adjustments so the newest height wins on disk.
+    this.pendingPreferenceSave = this.pendingPreferenceSave.catch(() => undefined)
+      .then(() => this.saveData(snapshot));
+    return this.pendingPreferenceSave;
+  }
+
   private async openViewer(): Promise<void> {
     const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_PGM)[0];
     const leaf = existing ?? this.app.workspace.getRightLeaf(false);
@@ -67,6 +90,10 @@ export default class PgmViewerPlugin extends Plugin {
 /** Obsidian owns vault access and pane navigation; rendering stays host-independent. */
 class PgmView extends ItemView {
   private viewer: PgmGraphViewer | null = null;
+
+  constructor(leaf: WorkspaceLeaf, private readonly plugin: PgmViewerPlugin) {
+    super(leaf);
+  }
 
   override getViewType(): string {
     return VIEW_TYPE_PGM;
@@ -99,6 +126,8 @@ class PgmView extends ItemView {
       reportError: (error) => {
         new Notice(error instanceof Error ? error.message : "The note could not be opened.");
       },
+      loadPropertyPanelHeight: () => this.plugin.loadPropertyPanelHeight(),
+      savePropertyPanelHeight: (height) => this.plugin.savePropertyPanelHeight(height),
     });
     await this.viewer.start();
   }

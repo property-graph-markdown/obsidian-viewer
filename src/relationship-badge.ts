@@ -1,4 +1,4 @@
-import { editorLivePreviewField, type MarkdownPostProcessorContext } from "obsidian";
+import { editorInfoField, editorLivePreviewField, type MarkdownPostProcessorContext } from "obsidian";
 import type { Range } from "@codemirror/state";
 import {
   Decoration,
@@ -15,7 +15,6 @@ import {
   type PgmRelationshipLinkSource,
 } from "./relationship-markdown";
 import { appendRelationshipBadge, PgmRelationshipBadgeWidget } from "./relationship-badge-widget";
-import { formatRelationshipTooltip } from "./relationship-tooltip";
 
 export { PgmRelationshipBadgeWidget } from "./relationship-badge-widget";
 
@@ -32,13 +31,14 @@ export function renderPgmRelationshipBadges(
 ): void {
   const section = context.getSectionInfo(root);
   if (!section) return;
-  renderPgmRelationshipBadgesFromMarkdown(root, section.text);
+  renderPgmRelationshipBadgesFromMarkdown(root, section.text, context.sourcePath);
 }
 
 /** Render canonical Relationship surfaces in an already-rendered Markdown section. */
 export function renderPgmRelationshipBadgesFromMarkdown(
   root: HTMLElement,
   markdown: string,
+  sourcePath?: string,
 ): number {
   const sourceLinks = extractCommonMarkLinkSources(markdown);
   const renderedLinks = Array.from(root.querySelectorAll<HTMLAnchorElement>("a[href]"));
@@ -55,13 +55,17 @@ export function renderPgmRelationshipBadgesFromMarkdown(
     if (!relationship || !renderedLink || renderedLink.querySelector("img, svg")) continue;
     if (renderedLink.dataset.pgmRelationshipBadge === "true") continue;
 
-    wrapRelationshipLabel(renderedLink);
-    appendRelationshipBadge(
-      renderedLink,
-      relationship.type,
-      formatRelationshipTooltip(relationship.properties),
-    );
-    renderedLink.classList.add("pgm-relationship-link");
+    const wrapper = root.ownerDocument.createElement("span");
+    wrapper.className = "pgm-relationship-link";
+    renderedLink.replaceWith(wrapper);
+    wrapper.appendChild(renderedLink);
+    renderedLink.classList.add("pgm-relationship-label");
+    renderedLink.removeAttribute("title");
+    appendRelationshipBadge(wrapper, relationship.type, {
+      properties: relationship.properties,
+      source: sourcePath,
+      target: relationship.link.renderedLabel,
+    });
     renderedLink.dataset.pgmRelationshipBadge = "true";
     renderedCount += 1;
   }
@@ -109,13 +113,6 @@ function destinationKey(destination: string): string {
   } catch {
     return withoutLeadingSlash;
   }
-}
-
-function wrapRelationshipLabel(container: HTMLElement): void {
-  const label = container.ownerDocument.createElement("span");
-  label.className = "pgm-relationship-label";
-  while (container.firstChild) label.appendChild(container.firstChild);
-  container.appendChild(label);
 }
 
 interface MarkdownDocumentSnapshot {
@@ -208,6 +205,7 @@ export function createPgmRelationshipBadgeDecorations(
           relationship.link.renderedLabel,
           relationship.type,
           relationship.properties,
+          view.state.field(editorInfoField, false)?.file?.path,
         ),
       }).range(link.start, link.end),
     );

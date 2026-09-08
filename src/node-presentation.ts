@@ -4,9 +4,9 @@ import type { PgmNode } from "./pgm";
 export const NODE_WIDTH = 272;
 export const NODE_RADIUS = 36;
 export const NODE_LABEL_TOP = 60;
-export const NODE_MIN_HEIGHT = 105;
-export const NODE_LABEL_LINE_HEIGHT = 25;
-const LABEL_FONT_SCALE = 18 / 13;
+export const NODE_MIN_HEIGHT = 112;
+export const NODE_LABEL_LINE_HEIGHT = 32;
+const LABEL_FONT_SCALE = 23 / 13;
 const LABEL_WIDTH = NODE_WIDTH - 36;
 const LABEL_VERTICAL_PADDING = 20;
 // A bounded palette avoids almost-identical adjacent hues. Types remain
@@ -125,7 +125,7 @@ export function graphemes(value: string): string[] {
   return result;
 }
 
-/** Scale the conservative 13px glyph estimates to the 18px UI font. */
+/** Scale the conservative 13px glyph estimates to the 23px UI font. */
 function glyphWidth(glyph: string): number {
   if (/^\s$/u.test(glyph)) return 4 * LABEL_FONT_SCALE;
   if (/\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u1100-\u11ff\u2e80-\ua4cf\uac00-\ud7af\uf900-\ufaff\uff01-\uff60]/u.test(glyph)) return 15 * LABEL_FONT_SCALE;

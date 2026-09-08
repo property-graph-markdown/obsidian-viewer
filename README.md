@@ -16,20 +16,22 @@ requests. Your Markdown stays in your vault.
   frontmatter becomes a node.
 - Concepts appear as circles with stable colours based on their type, in both
   light and dark themes. A borderless background that fades outward below
-  each circle shows Type: Title in a regular 16px font and wraps long titles onto as many lines
+  each circle shows Type: Title in a regular 23px font and wraps long titles onto as many lines
   as needed. Node height and overlap protection account for the circle and
   its full title.
 - Every Markdown Concept Link becomes a directed relationship occurrence.
 - The graph starts at one focus concept and initially shows only its direct
   neighbours. Refocusing starts a fresh local view instead of drawing the
   entire vault as a global hairball.
+  The initial zoom is 40%, centred on the focus. Refocusing keeps the current
+  zoom; **Fit graph** shows the overview.
 - A PGM 0.4 YAML flow-map link title supplies complete relationship properties;
   a non-empty string `type` is also shown as its relationship type.
 - All relationships between a pair of concepts share one visual connection.
   Its caption combines their distinct types; arrowheads at either end indicate
   the directions actually present. The original relationship occurrences and
   their properties remain separate, including repeated types.
-- Relationship types use a 14px font directly in a gap at the middle of their arrow,
+- Relationship types use a 21px font directly in a gap at the middle of their arrow,
   with a straight baseline aligned to its tangent and a readable orientation.
   Self relationships share a single loop. Text, arrows, and nodes zoom
   together; captions never detach from their relationships. A type that is too
@@ -45,6 +47,10 @@ requests. Your Markdown stays in your vault.
   connection lists every relationship it represents, each with its own type,
   source-to-target direction, and complete properties. The read-only panel
   scrolls when needed; property names and values wrap and can be copied.
+- Drag the divider above the property panel to set its height, or focus it and
+  use the Up/Down arrow keys. The height stays fixed across selections and
+  navigation and is saved locally for future sessions. Smaller windows may
+  temporarily limit it to keep the graph usable; more space restores the setting.
 - A selected concept also lists all its incoming and outgoing relationships,
   including occurrences beyond the current projection. Its relationship count
   jumps to that list. Selecting an entry shows the connection's full properties
@@ -56,7 +62,10 @@ requests. Your Markdown stays in your vault.
   zoom, and pan; clearing the search restores the full projection.
 - Canonical PGM relationship links gain a small direction badge and their
   relationship type in Reading View and Live Preview. Hovering over the badge or type
-  shows all relationship properties, including nested values, in its tooltip.
+  opens a dedicated, selectable property popover with all relationship properties,
+  including nested values. Keyboard focus or activation opens the same popover.
+  These surfaces do not trigger Obsidian's target-note preview; the target title
+  remains a normal navigable Markdown link. Escape or an outside click closes it.
   Moving the editor caret into the link exposes its original Markdown for
   direct editing.
 
