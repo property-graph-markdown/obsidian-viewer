@@ -1,6 +1,6 @@
 {
   "name": "pgm-viewer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A zen-minimal Property Graph Markdown viewer for Obsidian.",
   "private": true,
   "license": "MIT",
@@ -13,6 +13,7 @@
     "dev": "node esbuild.config.mjs",
     "verify": "node scripts/verify-release.mjs",
     "build": "npm run verify && tsc --noEmit && node esbuild.config.mjs production",
+    "build:web": "npm run verify && node scripts/build-web.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "package": "npm run build && node scripts/package-release.mjs",

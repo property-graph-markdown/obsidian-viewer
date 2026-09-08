@@ -137,6 +137,16 @@ graph data and navigation through `GraphViewerHost`; it has no Obsidian runtime
 dependency. [`src/main.ts`](src/main.ts) supplies the Obsidian adapter. A browser
 host can use the same controller and [`styles.css`](styles.css).
 
+Run `npm run build:web` to generate the standalone browser distribution in
+`dist/web/`. Its `index.js` is an ESM bundle of the shared source with no runtime
+package dependencies. Import `PgmGraphViewer` and `renderMarkdownViewer` from
+that entry, and load `styles.css`. Generated declarations are exposed through
+`index.d.ts`; they also export `GraphViewerHost` and the graph data types.
+The distribution includes the MIT `LICENSE`, a source map with the original
+source, and `source.json` recording the full Git commit, source hashes, and
+whether the working tree was modified. Build from a clean committed checkout
+when publishing an artifact tied to an exact revision.
+
 Web hosts can mount [`renderMarkdownViewer`](src/markdown-viewer.ts) beside the
 graph to show a note's original Markdown. Its close button or Escape calls the
 host's `onClose` callback, which removes the pane and returns focus to the graph.
@@ -167,7 +177,7 @@ therefore at millisecond precision.
 
 ## Install manually
 
-1. Download `pgm-viewer-0.1.0.zip` from the GitHub release and extract it.
+1. Download `pgm-viewer-0.1.1.zip` from the GitHub release and extract it.
 2. Copy the extracted `main.js`, `manifest.json`, and `styles.css` into
    `<your-vault>/.obsidian/plugins/pgm-viewer/`.
 3. In Obsidian, open **Settings → Community plugins**, reload installed plugins,
@@ -213,14 +223,14 @@ npm run build
 npm run package
 ```
 
-`npm run package` creates `release/pgm-viewer-0.1.0.zip`. Development mode uses
+`npm run package` creates `release/pgm-viewer-0.1.1.zip`. Development mode uses
 `npm run dev`; stop the watcher with Ctrl-C.
 
 ## Release
 
 Set the same version in `manifest.json`, `package.json`, and `versions.json`,
 commit the generated lockfile, then push a numeric tag matching the version
-exactly (for example `0.1.0`). GitHub Actions verifies, builds, attests, and
+exactly (for example `0.1.1`). GitHub Actions verifies, builds, attests, and
 publishes the release assets.
 
 ## Scope and license

@@ -1,5 +1,6 @@
 node_modules/
 main.js
+dist/
 release/
 coverage/
 .DS_Store

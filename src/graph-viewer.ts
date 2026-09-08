@@ -161,6 +161,16 @@ export class PgmGraphViewer {
     if (this.started) this.refocus(nodeId);
   }
 
+  /** Reveal an authored relationship occurrence and inspect its grouped edge. */
+  inspectRelationship(edgeId: string): void {
+    if (!this.started || !this.graph) return;
+    const edge = this.graph.edges.find((candidate) => candidate.id === edgeId);
+    if (!edge) return;
+    const projection = projectLocalGraph(this.graph, this.localState);
+    if (!projection.nodes.some((node) => node.id === edge.source)) this.refocus(edge.source);
+    this.inspectNodeRelationship(edge.source, edge);
+  }
+
   scheduleRefresh(): void {
     if (!this.started) return;
     window.clearTimeout(this.refreshTimer);
