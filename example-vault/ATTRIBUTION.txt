@@ -1,0 +1,21 @@
+Ada Lovelace PGM Demo Vault
+
+The complete contents of this demo-vault directory are licensed under the
+Creative Commons Attribution-ShareAlike 4.0 International license:
+https://creativecommons.org/licenses/by-sa/4.0/
+
+The 46 Concept documents, their PGM structure, and original project text were
+prepared for the Property Graph Markdown project and are Copyright (c) 2026
+Property Graph Markdown contributors.
+
+Historical facts and adapted wording are attributed in each Concept document
+to the linked English Wikipedia page or section, whose contributors publish
+under compatible Creative Commons Attribution-ShareAlike terms.
+
+The documents summarize, reorganize, and annotate those sources as an OKF 0.2
+Knowledge Bundle with PGM 0.4.0 Node and Relationship properties. Wikipedia
+page histories provide the contributor attribution for each cited page; open
+the cited page and select its History view to inspect those contributors.
+
+The specification, reference parser, tests, and other software in this
+repository remain available under the repository's MIT License.

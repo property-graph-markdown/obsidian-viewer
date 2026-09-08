@@ -1,0 +1,39 @@
+{
+  "name": "pgm-viewer",
+  "version": "0.1.0",
+  "description": "A zen-minimal Property Graph Markdown viewer for Obsidian.",
+  "private": true,
+  "license": "MIT",
+  "author": "Property Graph Markdown contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/property-graph-markdown/obsidian-viewer.git"
+  },
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "verify": "node scripts/verify-release.mjs",
+    "build": "npm run verify && tsc --noEmit && node esbuild.config.mjs production",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "npm run build && node scripts/package-release.mjs",
+    "release": "npm test && npm run package"
+  },
+  "dependencies": {
+    "markdown-it": "14.3.1",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@codemirror/state": "6.5.0",
+    "@codemirror/view": "6.38.6",
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^24.3.1",
+    "builtin-modules": "^5.0.0",
+    "esbuild": "^0.25.9",
+    "obsidian": "^1.8.7",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}
