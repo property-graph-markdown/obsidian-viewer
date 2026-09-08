@@ -15,6 +15,8 @@ import {
 import { nodeLabel, nodeTitle, nodePresentation, graphemes, NODE_LABEL_LINE_HEIGHT, NODE_RADIUS, NODE_LABEL_TOP } from "./node-presentation";
 import { edgeGeometry, unresolvedTarget } from "./edge-geometry";
 import { groupEdges, type PgmEdgeGroup } from "./edge-groups";
+import { NavigationHistory } from "./navigation-history";
+import { renderNodeRelationships } from "./node-relationships";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 let markerCounter = 0;
@@ -23,6 +25,16 @@ type Selection =
   | { kind: "node"; id: string }
   | { kind: "edge"; id: string }
   | null;
+
+interface GraphViewSnapshot {
+  localState: LocalGraphState;
+  selection: Selection;
+  highlightedNodeId: string | null;
+  query: string;
+  positions: Map<string, PositionedPgmNode>;
+  camera: { x: number; y: number; scale: number };
+  fitScale: number;
+}
 
 interface GraphSurface {
   svg: SVGSVGElement;
@@ -79,6 +91,7 @@ export class PgmGraphViewer {
   private viewportSize = { width: 0, height: 0 };
   private fitScale = 1;
   private openNodeGeneration = 0;
+  private readonly history = new NavigationHistory<GraphViewSnapshot>();
 
   private started = false;
   private readonly onDocumentKeyDown = (event: KeyboardEvent): void => {
@@ -146,6 +159,12 @@ export class PgmGraphViewer {
   private reconcileLocalState(): void {
     if (!this.graph) return;
     const nodeIds = new Set(this.graph.nodes.map((node) => node.id));
+    this.history.retain((entry) => entry.localState.focusNodeId !== null
+      && nodeIds.has(entry.localState.focusNodeId));
+    if (this.localState.focusNodeId !== null && !nodeIds.has(this.localState.focusNodeId)) {
+      const previous = this.history.current;
+      if (previous) this.restoreView(previous);
+    }
     for (const id of this.positions.keys()) {
       if (!nodeIds.has(id)) this.positions.delete(id);
     }
@@ -161,6 +180,7 @@ export class PgmGraphViewer {
       this.localState = createLocalGraphState(focusNodeId);
       this.selection = focusNodeId ? { kind: "node", id: focusNodeId } : null;
       this.highlightedNodeId = null;
+      this.history.reset(this.captureView());
     } else {
       this.localState = {
         focusNodeId,
@@ -229,6 +249,11 @@ export class PgmGraphViewer {
     title.append(titleLine, this.renderSummary(projection));
 
     const actions = element("div", "pgm-actions");
+    const navigation = actionGroup(actions, "Graph navigation");
+    const back = this.iconButton(navigation, "arrow-left", "Back", () => this.navigateHistory("back"));
+    back.disabled = !this.history.canGoBack;
+    const forward = this.iconButton(navigation, "arrow-right", "Forward", () => this.navigateHistory("forward"));
+    forward.disabled = !this.history.canGoForward;
     const selectionActions = actionGroup(actions, "Selection actions");
     const openSelected = this.iconButton(
       selectionActions,
@@ -536,7 +561,6 @@ export class PgmGraphViewer {
       if (event.ctrlKey || event.metaKey) return;
       event.preventDefault();
       window.clearTimeout(this.nodeClickTimer);
-      this.selection = { kind: "node", id: node.id };
       this.toggleNodeExpansion(node.id);
     });
     group.addEventListener("contextmenu", (event) => {
@@ -551,7 +575,6 @@ export class PgmGraphViewer {
         this.refocus(node.id);
       } else if (event.key === " ") {
         event.preventDefault();
-        this.selection = { kind: "node", id: node.id };
         this.toggleNodeExpansion(node.id);
       } else if (event.key === "Enter") {
         event.preventDefault();
@@ -666,39 +689,121 @@ export class PgmGraphViewer {
 
   private select(selection: Selection): void {
     window.clearTimeout(this.nodeClickTimer);
+    const highlightedNodeId = selection?.kind === "node" ? selection.id : null;
+    if (this.selection?.kind === selection?.kind && this.selection?.id === selection?.id
+      && this.highlightedNodeId === highlightedNodeId) return;
+    this.openNodeGeneration += 1;
+    this.history.replaceCurrent(this.captureView());
     this.selection = selection;
-    this.highlightedNodeId = selection?.kind === "node" ? selection.id : null;
-    // Clearing the detail panel must not refit or pan the visible graph.
-    const camera = selection === null ? { ...this.camera } : null;
-    if (camera) this.fitGraphToPane = false;
+    this.highlightedNodeId = highlightedNodeId;
+    this.history.push(this.captureView());
+    this.renderPreservingCamera();
+  }
+
+  private renderPreservingCamera(): void {
+    // Selection and disclosure keep the user's view, even if the
+    // resized property panel changes the canvas height during rendering.
+    const camera = { ...this.camera };
+    this.fitGraphToPane = false;
     this.render();
-    if (camera) {
-      this.camera = camera;
-      this.applyCamera();
-    }
+    this.camera = camera;
+    this.applyCamera();
   }
 
   private refocus(nodeId: string): void {
     if (!this.graph?.nodes.some((node) => node.id === nodeId)) return;
+    window.clearTimeout(this.nodeClickTimer);
+    this.openNodeGeneration += 1;
+    if (nodeId === this.localState.focusNodeId) {
+      this.select({ kind: "node", id: nodeId });
+      return;
+    }
+    this.history.replaceCurrent(this.captureView());
     this.highlightedNodeId = null;
     this.localState = refocusLocalGraph(this.localState, nodeId);
     this.positions.clear();
     this.selection = { kind: "node", id: nodeId };
     this.fitGraphToPane = true;
+    this.history.push(this.captureView());
     this.render();
+  }
+
+  private captureView(): GraphViewSnapshot {
+    return {
+      localState: {
+        focusNodeId: this.localState.focusNodeId,
+        expandedNodeIds: new Set(this.localState.expandedNodeIds),
+      },
+      selection: this.selection ? { ...this.selection } : null,
+      highlightedNodeId: this.highlightedNodeId,
+      query: this.query,
+      positions: new Map([...this.positions].map(([id, node]) => [id, { ...node }])),
+      camera: { ...this.camera },
+      fitScale: this.fitScale,
+    };
+  }
+
+  private navigateHistory(direction: "back" | "forward"): void {
+    if (direction === "back" ? !this.history.canGoBack : !this.history.canGoForward) return;
+    window.clearTimeout(this.nodeClickTimer);
+    this.openNodeGeneration += 1;
+    this.history.replaceCurrent(this.captureView());
+    const entry = this.history[direction]();
+    if (!entry) return;
+    this.restoreView(entry);
+    this.reconcileLocalState();
+    this.renderPreservingCamera();
+  }
+
+  private restoreView(entry: GraphViewSnapshot): void {
+    this.localState = {
+      focusNodeId: entry.localState.focusNodeId,
+      expandedNodeIds: new Set(entry.localState.expandedNodeIds),
+    };
+    this.selection = entry.selection ? { ...entry.selection } : null;
+    this.highlightedNodeId = entry.highlightedNodeId;
+    this.query = entry.query;
+    this.positions = new Map([...entry.positions].map(([id, node]) => [id, { ...node }]));
+    this.camera = { ...entry.camera };
+    this.fitScale = entry.fitScale;
+    this.fitGraphToPane = false;
   }
 
   private toggleNodeExpansion(nodeId: string): void {
     if (!this.graph?.nodes.some((node) => node.id === nodeId)) return;
+    window.clearTimeout(this.nodeClickTimer);
+    this.openNodeGeneration += 1;
+    this.history.replaceCurrent(this.captureView());
+    this.selection = { kind: "node", id: nodeId };
     this.localState = toggleLocalNodeExpansion(this.localState, nodeId);
     this.reconcileVisibleSelection();
-    this.fitGraphToPane = true;
-    this.render();
+    this.history.push(this.captureView());
+    this.renderPreservingCamera();
   }
 
   private toggleSelectedExpansion(): void {
     if (this.selection?.kind !== "node") return;
     this.toggleNodeExpansion(this.selection.id);
+  }
+
+  private inspectNodeRelationship(nodeId: string, edge: PgmEdge): void {
+    if (!this.graph) return;
+    window.clearTimeout(this.nodeClickTimer);
+    const connection = groupEdges([edge])[0];
+    if (!connection) return;
+    const projection = projectLocalGraph(this.graph, this.localState);
+    const revealsRelationships = !projection.edges.some((visible) => visible.id === edge.id);
+    if (!revealsRelationships) {
+      this.select({ kind: "edge", id: connection.id });
+      return;
+    }
+    this.openNodeGeneration += 1;
+    this.history.replaceCurrent(this.captureView());
+    this.localState = toggleLocalNodeExpansion(this.localState, nodeId);
+    this.selection = { kind: "edge", id: connection.id };
+    this.highlightedNodeId = null;
+    this.history.push(this.captureView());
+    this.renderPreservingCamera();
   }
 
   private async openSelected(): Promise<void> {
@@ -1038,13 +1143,23 @@ export class PgmGraphViewer {
     if (this.selection.kind === "node") {
       const node = this.graph.nodes.find((node) => node.id === this.selection?.id);
       if (!node) return details;
+      details.classList.add("has-node-relationships");
       const heading = element("div", "pgm-details-heading");
       heading.append(
         textElement("p", "Concept", "pgm-details-kicker"),
         textElement("h3", nodeLabel(node)),
         textElement("p", node.id, "pgm-details-path"),
       );
-      details.append(heading, renderProperties(node.properties));
+      const relationships = renderNodeRelationships(this.graph, node.id,
+        (edge) => this.inspectNodeRelationship(node.id, edge), details.ownerDocument);
+      const count = this.graph.edges.filter((edge) => edge.source === node.id || edge.target === node.id).length;
+      const jump = textElement("button", `${count} relationship${count === 1 ? "" : "s"}`, "pgm-node-relationships-jump");
+      jump.type = "button";
+      jump.addEventListener("click", () => {
+        details.scrollTop += relationships.getBoundingClientRect().top - details.getBoundingClientRect().top - 10;
+      });
+      heading.append(jump);
+      details.append(heading, renderProperties(node.properties), relationships);
       return details;
     }
 

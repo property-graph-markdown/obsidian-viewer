@@ -19,4 +19,22 @@ describe("Live Preview Relationship badge", () => {
     expect(previous.eq(new PgmRelationshipBadgeWidget("Peer.md", "Other", "knows"))).toBe(false);
     expect(previous.eq(new PgmRelationshipBadgeWidget("Peer.md", "Peer", "cites"))).toBe(false);
   });
+
+  it("refreshes when only a nested Relationship property changes", () => {
+    const previous = new PgmRelationshipBadgeWidget("Peer.md", "Peer", "cites", {
+      type: "cites",
+      evidence: [{ source: "letter", metadata: { page: 42 } }],
+    });
+    const same = new PgmRelationshipBadgeWidget("Peer.md", "Peer", "cites", {
+      type: "cites",
+      evidence: [{ source: "letter", metadata: { page: 42 } }],
+    });
+    const changed = new PgmRelationshipBadgeWidget("Peer.md", "Peer", "cites", {
+      type: "cites",
+      evidence: [{ source: "letter", metadata: { page: 43 } }],
+    });
+
+    expect(previous.eq(same)).toBe(true);
+    expect(previous.eq(changed)).toBe(false);
+  });
 });

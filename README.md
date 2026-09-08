@@ -45,16 +45,27 @@ requests. Your Markdown stays in your vault.
   connection lists every relationship it represents, each with its own type,
   source-to-target direction, and complete properties. The read-only panel
   scrolls when needed; property names and values wrap and can be copied.
+- A selected concept also lists all its incoming and outgoing relationships,
+  including occurrences beyond the current projection. Its relationship count
+  jumps to that list. Selecting an entry shows the connection's full properties
+  and reveals its neighbours if needed, preserving the current zoom and pan.
 - Search matches names, IDs, types, link text, and property values inside the
   current local projection; it does not reveal unrelated vault content.
 - Canonical PGM relationship links gain a small direction badge and their
-  relationship type in Reading View and Live Preview. Hovering over the badge
+  relationship type in Reading View and Live Preview. Hovering over the badge or type
   shows all relationship properties, including nested values, in its tooltip.
   Moving the editor caret into the link exposes its original Markdown for
   direct editing.
 
 ## Explore the local graph
 
+- **Back / Forward** revisit concept and relationship selections, graph focus
+  changes, and expanded or contracted branches. Each step restores its
+  expanded branches, manual node positions, selection, search, zoom, and pan.
+  Navigation from the property panel and clearing the selection are included.
+  Selecting the same element again or adjusting the camera does not add a step.
+  A new selection, focus, expansion, or contraction after going back replaces
+  the forward branch.
 - **Drag a concept** to move only that concept; its relationships follow and
   every other concept stays in place. Manual positions are retained even when
   titles overlap. Selecting a concept or relationship preserves the current
@@ -69,7 +80,8 @@ requests. Your Markdown stays in your vault.
   show the current zoom level, and fit the graph to the pane.
 - **Double-click** a concept to expand or contract its relationships. Expansion
   can be repeated from already visible concepts; contraction hides the branch
-  again.
+  again. Both keep the current zoom and pan position; use **Fit graph** when
+  you want to see the entire projection.
 - **Ctrl-click** on Windows/Linux or **Command-click** on macOS makes a concept
   the new focus. Keyboard users can use Ctrl/Command+Enter; Space toggles
   expansion.
@@ -92,6 +104,10 @@ core in [`src/graph-viewer.ts`](src/graph-viewer.ts). `PgmGraphViewer` receives
 graph data and navigation through `GraphViewerHost`; it has no Obsidian runtime
 dependency. [`src/main.ts`](src/main.ts) supplies the Obsidian adapter. A browser
 host can use the same controller and [`styles.css`](styles.css).
+
+Web hosts can mount [`renderMarkdownViewer`](src/markdown-viewer.ts) beside the
+graph to show a note's original Markdown. Its close button or Escape calls the
+host's `onClose` callback, which removes the pane and returns focus to the graph.
 
 **Pegana on pegana.net is a separate, independent codebase.** Its proprietary
 Graph-to-Mindmap editor, editing tools, and Inspector are outside this OSS

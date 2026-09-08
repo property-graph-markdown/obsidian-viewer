@@ -5,7 +5,7 @@ import { formatRelationshipTooltip } from "./relationship-tooltip";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-/** Shared by Reading View and Live Preview so both badges expose the same tooltip. */
+/** Shared by Reading View and Live Preview so badges and types expose the same tooltip. */
 export function appendRelationshipBadge(
   container: HTMLElement,
   relationshipType: string,
@@ -23,6 +23,7 @@ export function appendRelationshipBadge(
 
   const type = rootDocument.createElement("span");
   type.className = "pgm-relationship-type";
+  type.setAttribute("title", tooltip);
   type.textContent = `:${relationshipType}`;
   container.append(badge, type);
 }
