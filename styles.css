@@ -389,6 +389,17 @@ body.pgm-has-maximized-viewer {
   transition: opacity 120ms ease;
 }
 
+.pgm-edge {
+  opacity: 0.75;
+}
+
+.pgm-edge:hover,
+.pgm-edge:focus-visible,
+.pgm-edge.is-related,
+.pgm-edge.is-selected {
+  opacity: 1;
+}
+
 .pgm-node.is-dimmed,
 .pgm-edge.is-dimmed {
   opacity: 0.14;

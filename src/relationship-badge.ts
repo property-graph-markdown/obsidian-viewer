@@ -1,4 +1,4 @@
-import { editorInfoField, editorLivePreviewField, type MarkdownPostProcessorContext } from "obsidian";
+import { editorInfoField, editorLivePreviewField, getFrontMatterInfo, parseYaml, type MarkdownPostProcessorContext } from "obsidian";
 import type { Range } from "@codemirror/state";
 import {
   Decoration,
@@ -15,6 +15,8 @@ import {
   type PgmRelationshipLinkSource,
 } from "./relationship-markdown";
 import { appendRelationshipBadge, PgmRelationshipBadgeWidget } from "./relationship-badge-widget";
+import { nodeLabel } from "./node-presentation";
+import type { PgmProperties } from "./pgm";
 
 export { PgmRelationshipBadgeWidget } from "./relationship-badge-widget";
 
@@ -31,7 +33,7 @@ export function renderPgmRelationshipBadges(
 ): void {
   const section = context.getSectionInfo(root);
   if (!section) return;
-  renderPgmRelationshipBadgesFromMarkdown(root, section.text, context.sourcePath);
+  renderPgmRelationshipBadgesFromMarkdown(root, section.text, context.sourcePath, context.frontmatter);
 }
 
 /** Render canonical Relationship surfaces in an already-rendered Markdown section. */
@@ -39,7 +41,9 @@ export function renderPgmRelationshipBadgesFromMarkdown(
   root: HTMLElement,
   markdown: string,
   sourcePath?: string,
+  frontmatter?: unknown,
 ): number {
+  const sourceLabel = relationshipSourceLabel(sourcePath, frontmatter);
   const sourceLinks = extractCommonMarkLinkSources(markdown);
   const renderedLinks = Array.from(root.querySelectorAll<HTMLAnchorElement>("a[href]"));
   let renderedCursor = 0;
@@ -63,7 +67,7 @@ export function renderPgmRelationshipBadgesFromMarkdown(
     renderedLink.removeAttribute("title");
     appendRelationshipBadge(wrapper, relationship.type, {
       properties: relationship.properties,
-      source: sourcePath,
+      source: sourceLabel,
       target: relationship.link.renderedLabel,
     });
     renderedLink.dataset.pgmRelationshipBadge = "true";
@@ -71,6 +75,12 @@ export function renderPgmRelationshipBadgesFromMarkdown(
   }
 
   return renderedCount;
+}
+
+function relationshipSourceLabel(sourcePath: string | undefined, frontmatter: unknown): string {
+  const properties = frontmatter && typeof frontmatter === "object" && !Array.isArray(frontmatter)
+    ? frontmatter as PgmProperties : {};
+  return nodeLabel({ id: (sourcePath ?? "").replace(/\.md$/, ""), properties });
 }
 
 function findRenderedLink(
@@ -184,6 +194,13 @@ export function createPgmRelationshipBadgeDecorations(
 ): DecorationSet {
   if (!view.state.field(editorLivePreviewField)) return Decoration.none;
 
+  let frontmatter: unknown;
+  try {
+    frontmatter = parseYaml(getFrontMatterInfo(view.state.doc.toString()).frontmatter);
+  } catch {
+    // Keep badges usable while the note's YAML is incomplete during editing.
+  }
+  const sourceLabel = relationshipSourceLabel(view.state.field(editorInfoField, false)?.file?.path, frontmatter);
   const ranges: Range<Decoration>[] = [];
   for (const relationship of sources) {
     const { link } = relationship;
@@ -205,7 +222,7 @@ export function createPgmRelationshipBadgeDecorations(
           relationship.link.renderedLabel,
           relationship.type,
           relationship.properties,
-          view.state.field(editorInfoField, false)?.file?.path,
+          sourceLabel,
         ),
       }).range(link.start, link.end),
     );

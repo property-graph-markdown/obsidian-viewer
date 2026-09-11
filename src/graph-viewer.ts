@@ -615,7 +615,7 @@ export class PgmGraphViewer {
     if (isFocus) group.setAttribute("aria-current", "true");
     group.setAttribute(
       "aria-label",
-      `${nodeTitle(node)}${isFocus ? ", focus" : ""}. Drag to move; Shift-click to add or remove from selection; double-click to ${isExpanded ? "contract" : "expand"}; Ctrl or Command click to focus.`,
+      `${nodeTitle(node)}${isFocus ? ", focus" : ""}`,
     );
 
     if (isFocus) {
@@ -650,7 +650,7 @@ export class PgmGraphViewer {
       label.append(span);
     });
     const tooltip = svgElement("title");
-    tooltip.textContent = `${nodeTitle(node)}\n${node.path}\nDrag: move · Double-click: ${isExpanded ? "contract" : "expand"} · Ctrl/Cmd-click: focus`;
+    tooltip.textContent = `${nodeLabel(node)}\nType: ${node.type}\n${node.path}`;
     group.append(body, titleBackground, label, tooltip);
 
     group.addEventListener("click", (event) => {

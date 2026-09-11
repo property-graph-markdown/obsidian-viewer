@@ -1,7 +1,7 @@
 {
   "id": "pgm-viewer",
   "name": "PGM Viewer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "minAppVersion": "1.5.12",
   "description": "A zen-minimal graph view for Property Graph Markdown vaults.",
   "author": "Property Graph Markdown contributors",

@@ -23,10 +23,10 @@ describe("node presentation", () => {
     }
   });
 
-  it("keeps the name fallback and prefixes the type inline", () => {
+  it("keeps the name fallback and displays node labels without the type", () => {
     expect(nodeLabel(node("Ada Lovelace"))).toBe("Ada Lovelace");
     expect(nodeTitle(node("Ada Lovelace"))).toBe("Person: Ada Lovelace");
-    expect(nodePresentation(node("Ada")).lines).toEqual(["Person: Ada"]);
+    expect(nodePresentation(node("Ada")).lines).toEqual(["Ada"]);
     for (const name of [undefined, null, "", 1815]) {
       expect(nodeLabel(node(name))).toBe("ada");
       expect(nodeTitle(node(name))).toBe("Person: ada");
@@ -37,7 +37,7 @@ describe("node presentation", () => {
     const title = "A very long concept title that needs several lines without hiding any words";
     const presentation = nodePresentation(node(title));
     expect(presentation.lines.length).toBeGreaterThan(2);
-    expect(presentation.lines.join(" ")).toBe(`Person: ${title}`);
+    expect(presentation.lines.join(" ")).toBe(title);
     expect(presentation.width).toBe(NODE_WIDTH);
     expect(presentation.height).toBeGreaterThan(NODE_MIN_HEIGHT);
     expect(presentation.height).toBeGreaterThan(presentation.lines.length * NODE_LABEL_LINE_HEIGHT);
@@ -49,11 +49,11 @@ describe("node presentation", () => {
     for (const title of ["W".repeat(150), "漢字仮名交じり文".repeat(12), cluster.repeat(40), "e\u0301".repeat(150)]) {
       const presentation = nodePresentation(node(title, "Concept"));
       expect(presentation.lines.length).toBeGreaterThan(2);
-      expect(presentation.lines.join("").replace(/ /gu, "")).toBe(`Concept:${title}`);
+      expect(presentation.lines.join("").replace(/ /gu, "")).toBe(title);
       expect(presentation.lines.every((line) => !/^[\p{Mark}\u200d\u{1f3fb}-\u{1f3ff}]/u.test(line))).toBe(true);
       expect(presentation.lines.every((line) => !line.endsWith("\u200d"))).toBe(true);
     }
-    const emojiLines = nodePresentation(node(cluster.repeat(40), "Concept")).lines.slice(1);
+    const emojiLines = nodePresentation(node(cluster.repeat(40), "Concept")).lines;
     expect(emojiLines.every((line) => line.replaceAll(cluster, "") === "")).toBe(true);
   });
 

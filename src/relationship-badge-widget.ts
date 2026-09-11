@@ -50,7 +50,7 @@ export class PgmRelationshipBadgeWidget extends WidgetType {
     private readonly readerLabel: string,
     private readonly relationshipType: string,
     private readonly relationshipProperties: PgmProperties = { type: relationshipType },
-    private readonly sourcePath?: string,
+    private readonly sourceLabel?: string,
   ) {
     super();
     this.tooltip = formatRelationshipTooltip(relationshipProperties);
@@ -62,7 +62,7 @@ export class PgmRelationshipBadgeWidget extends WidgetType {
       this.readerLabel === other.readerLabel &&
       this.relationshipType === other.relationshipType &&
       this.tooltip === other.tooltip &&
-      this.sourcePath === other.sourcePath
+      this.sourceLabel === other.sourceLabel
     );
   }
 
@@ -81,7 +81,7 @@ export class PgmRelationshipBadgeWidget extends WidgetType {
     wrapper.appendChild(link);
     appendRelationshipBadge(wrapper, this.relationshipType, {
       properties: this.relationshipProperties,
-      source: this.sourcePath,
+      source: this.sourceLabel,
       target: this.readerLabel,
     });
     return wrapper;

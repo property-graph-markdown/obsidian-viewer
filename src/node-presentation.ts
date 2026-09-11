@@ -10,7 +10,7 @@ const LABEL_FONT_SCALE = 23 / 13;
 const LABEL_WIDTH = NODE_WIDTH - 36;
 const LABEL_VERTICAL_PADDING = 20;
 // A bounded palette avoids almost-identical adjacent hues. Types remain
-// visible in the label as well, including when two types share a colour.
+// available in the tooltip, including when two types share a colour.
 const TYPE_COLORS = [
   "#3f81cc", "#bc861f", "#c35980", "#8b5fc7", "#29958b", "#c46c3a",
   "#5c944b", "#5970b5", "#bb5670", "#8d7a48", "#527f94", "#aa643e",
@@ -24,7 +24,7 @@ export interface NodePresentation {
 }
 
 /** Prefer the readable title, then a name, before falling back to the ID. */
-export function nodeLabel(node: PgmNode): string {
+export function nodeLabel(node: Pick<PgmNode, "id" | "properties">): string {
   for (const key of ["title", "name"]) {
     const value = node.properties[key];
     if (typeof value === "string" && value.trim().length > 0) return value;
@@ -39,7 +39,7 @@ export function nodeTitle(node: PgmNode): string {
 
 /** No DOM measurement is needed, so layout also works before the pane opens. */
 export function nodePresentation(node: PgmNode): NodePresentation {
-  const lines = wrapLabel(nodeTitle(node));
+  const lines = wrapLabel(nodeLabel(node));
   return {
     width: NODE_WIDTH,
     height: Math.max(NODE_MIN_HEIGHT, NODE_LABEL_TOP + lines.length * NODE_LABEL_LINE_HEIGHT + LABEL_VERTICAL_PADDING),

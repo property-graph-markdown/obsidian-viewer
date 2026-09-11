@@ -16,9 +16,9 @@ requests. Your Markdown stays in your vault.
   frontmatter becomes a node.
 - Concepts appear as circles with stable colours based on their type, in both
   light and dark themes. A borderless background that fades outward below
-  each circle shows Type: Title in a regular 23px font and wraps long titles onto as many lines
-  as needed. Node height and overlap protection account for the circle and
-  its full title.
+  each circle shows the title in a regular 23px font and wraps long titles onto as many lines
+  as needed. The node tooltip shows its title, type, and file path. Node height
+  and overlap protection account for the circle and its full title.
 - Every Markdown Concept Link becomes a directed relationship occurrence.
 - The graph starts at one focus concept and initially shows only its direct
   neighbours. Refocusing starts a fresh local view instead of drawing the
@@ -38,7 +38,7 @@ requests. Your Markdown stays in your vault.
   long for its arrow is shortened with an ellipsis; its complete value remains
   available in the tooltip and property strip. The documented compatibility
   edge without a type is honestly labelled `untyped`.
-- Neutral arrows and a plain background keep the overview quiet. Hovering or
+- Neutral arrows and relationship captions at 75% opacity keep the overview quiet. Hovering or
   selecting a relationship accents that arrow; selecting it also fades other
   relationships and concepts outside its two endpoints.
 - Unresolved concept targets remain relationships and are drawn with a dashed
@@ -55,7 +55,7 @@ requests. Your Markdown stays in your vault.
   including occurrences beyond the current projection. Its relationship count
   jumps to that list. Selecting an entry shows the connection's full properties
   and reveals its neighbours if needed, preserving the current zoom and pan.
-- Search keeps nodes whose displayed `Type: Title` contains every entered
+- Search keeps nodes whose type and title contain every entered
   keyword, ignoring case. The central focus node always stays visible, along
   with relationships connecting it to matching nodes and those between matches.
   It filters the current local projection while preserving node positions,
@@ -63,7 +63,8 @@ requests. Your Markdown stays in your vault.
 - Canonical PGM relationship links gain a small direction badge and their
   relationship type in Reading View and Live Preview. Hovering over the badge or type
   opens a dedicated, selectable property popover with all relationship properties,
-  including nested values. Keyboard focus or activation opens the same popover.
+  including nested values. Source uses the node's title or name, with its filename
+  as fallback; Target uses the link's readable label. Keyboard focus or activation opens the same popover.
   These surfaces do not trigger Obsidian's target-note preview; the target title
   remains a normal navigable Markdown link. Escape or an outside click closes it.
   Moving the editor caret into the link exposes its original Markdown for
@@ -177,7 +178,7 @@ therefore at millisecond precision.
 
 ## Install manually
 
-1. Download `pgm-viewer-0.1.1.zip` from the GitHub release and extract it.
+1. Download `pgm-viewer-0.1.2.zip` from the GitHub release and extract it.
 2. Copy the extracted `main.js`, `manifest.json`, and `styles.css` into
    `<your-vault>/.obsidian/plugins/pgm-viewer/`.
 3. In Obsidian, open **Settings → Community plugins**, reload installed plugins,
@@ -223,14 +224,14 @@ npm run build
 npm run package
 ```
 
-`npm run package` creates `release/pgm-viewer-0.1.1.zip`. Development mode uses
+`npm run package` creates `release/pgm-viewer-0.1.2.zip`. Development mode uses
 `npm run dev`; stop the watcher with Ctrl-C.
 
 ## Release
 
 Set the same version in `manifest.json`, `package.json`, and `versions.json`,
 commit the generated lockfile, then push a numeric tag matching the version
-exactly (for example `0.1.1`). GitHub Actions verifies, builds, attests, and
+exactly (for example `0.1.2`). GitHub Actions verifies, builds, attests, and
 publishes the release assets.
 
 ## Scope and license
