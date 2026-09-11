@@ -231,8 +231,9 @@ npm run package
 
 Set the same version in `manifest.json`, `package.json`, and `versions.json`,
 commit the generated lockfile, then push a numeric tag matching the version
-exactly (for example `0.1.2`). GitHub Actions verifies, builds, attests, and
-publishes the release assets.
+exactly (for example `0.1.2`). GitHub Actions verifies, builds, and publishes
+the release assets. Build provenance attestations are added when the repository
+is public.
 
 ## Scope and license
 

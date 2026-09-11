@@ -23,6 +23,7 @@ jobs:
         run: node -e "const v=require('./manifest.json').version;if(process.env.GITHUB_REF_NAME!==v)throw new Error('Tag must exactly equal manifest version '+v)"
       - run: npm run release
       - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        if: ${{ github.event.repository.private == false }}
         with:
           subject-path: |
             main.js
