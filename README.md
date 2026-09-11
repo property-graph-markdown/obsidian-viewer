@@ -132,7 +132,7 @@ The viewer stays minimal and read-only: explore relationships, inspect their
 properties, and navigate to concepts. Editing happens in the Markdown editor.
 Its generic graph layout provides size-aware collision avoidance.
 
-The OSS viewer for Obsidian and the web demo on **pgm.md** can share a rendering
+The OSS viewer for Obsidian and the web demo on **pgm.technology** share a rendering
 core in [`src/graph-viewer.ts`](src/graph-viewer.ts). `PgmGraphViewer` receives
 graph data and navigation through `GraphViewerHost`; it has no Obsidian runtime
 dependency. [`src/main.ts`](src/main.ts) supplies the Obsidian adapter. A browser
